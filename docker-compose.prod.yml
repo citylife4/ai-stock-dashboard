@@ -26,11 +26,13 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.ssl
     container_name: ai-stock-dashboard-frontend-prod
     ports:
       - "34197:80"   # For HTTP
-      # - "443:80" # If you have SSL termination at load balancer
+      - "34198:443"  # For HTTPS
+    volumes:
+      - ./ssl:/etc/nginx/ssl:ro  # Mount SSL certificates
     depends_on:
       - backend
     networks:

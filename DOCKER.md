@@ -27,7 +27,8 @@ This guide explains how to run the AI Stock Dashboard using Docker.
    ```
 
 4. **Access the application:**
-   - Frontend: http://localhost
+   - Frontend HTTP: http://localhost:34197
+   - Frontend HTTPS: https://localhost:34198 (if SSL certificates are available)
    - Backend API: http://localhost:8000
    - API Documentation: http://localhost:8000/docs
 
@@ -116,8 +117,28 @@ docker-compose build frontend
 ## Production Deployment
 
 ### Required Ports for Production:
-- **Port 80 (HTTP)** - Frontend application
-- **Optional: Port 443 (HTTPS)** - If handling SSL at container level
+- **Port 34197 (HTTP)** - Frontend application
+- **Port 34198 (HTTPS)** - Secure frontend application
+
+### HTTPS Setup Options:
+
+#### Option 1: Self-Signed Certificates (Development/Testing)
+```bash
+# Generate self-signed certificates
+./generate-ssl.sh
+
+# Deploy with HTTPS
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+#### Option 2: Let's Encrypt Certificates (Production)
+```bash
+# Edit setup-letsencrypt.sh with your domain and email
+nano setup-letsencrypt.sh
+
+# Run Let's Encrypt setup
+./setup-letsencrypt.sh
+```
 
 ### Security Recommendations:
 1. **Do NOT expose backend port 8000** in production
