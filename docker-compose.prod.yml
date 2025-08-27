@@ -11,8 +11,8 @@ services:
       - HOST=0.0.0.0
       - PORT=8000
       - DEBUG=false
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - GROQ_API_KEY=${GROQ_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
     networks:
       - ai-stock-network
     restart: unless-stopped
@@ -29,7 +29,7 @@ services:
       dockerfile: Dockerfile
     container_name: ai-stock-dashboard-frontend-prod
     ports:
-      - "80:80"   # For HTTP
+      - "34197:80"   # For HTTP
       # - "443:80" # If you have SSL termination at load balancer
     depends_on:
       - backend
