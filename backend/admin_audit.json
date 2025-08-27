@@ -1,8 +1,20 @@
 [
   {
+    "timestamp": "2025-08-27 22:38:51.773114",
+    "action": "admin_login",
+    "details": "Admin admin logged in",
+    "admin_user": "admin"
+  },
+  {
     "timestamp": "2025-08-27 22:30:58.314814",
     "action": "admin_login",
     "details": "Admin admin logged in",
+    "admin_user": "admin"
+  },
+  {
+    "timestamp": "2025-08-27 22:39:16.196532",
+    "action": "add_stock",
+    "details": "Added stock AMD to tracking list",
     "admin_user": "admin"
   }
 ]
