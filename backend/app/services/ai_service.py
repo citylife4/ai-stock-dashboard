@@ -5,28 +5,86 @@ import openai
 from ..models import StockData, AIAnalysis
 from ..config import config
 import logging
+from groq import Groq
 
 logger = logging.getLogger(__name__)
 
 
 class AIService:
     def __init__(self):
-        self.use_mock_analysis = not config.OPENAI_API_KEY
+        self.use_mock_analysis = not (config.OPENAI_API_KEY or config.GROQ_API_KEY)
         if config.OPENAI_API_KEY:
             openai.api_key = config.OPENAI_API_KEY
+        if config.GROQ_API_KEY:
+            self.groq_client = Groq(api_key=config.GROQ_API_KEY)
     
     def analyze_stock(self, stock_data: StockData) -> AIAnalysis:
         """Analyze stock data using AI or mock analysis."""
         try:
-            if not self.use_mock_analysis:
-                return self._get_real_analysis(stock_data)
-            else:
+            if self.use_mock_analysis:
                 return self._generate_mock_analysis(stock_data)
+            else:
+                if config.GROQ_API_KEY:
+                    return self._get_real_analysis_groq(stock_data)
+                else:
+                    return self._get_real_analysis_open_ai(stock_data)
         except Exception as e:
             logger.error(f"Error analyzing stock {stock_data.symbol}: {e}")
             return self._generate_mock_analysis(stock_data)
-    
-    def _get_real_analysis(self, stock_data: StockData) -> AIAnalysis:
+       
+    def _get_real_analysis_groq(self, stock_data: StockData) -> AIAnalysis:
+        """Get real AI analysis using OpenAI."""
+        try:
+            # Format the prompt with stock data
+            prompt = config.AI_ANALYSIS_PROMPT.format(
+                symbol=stock_data.symbol,
+                current_price=stock_data.current_price,
+                previous_close=stock_data.previous_close,
+                change_percent=stock_data.change_percent,
+                volume=f"{stock_data.volume:,}",
+                market_cap=f"{stock_data.market_cap:,}" if stock_data.market_cap else "N/A"
+            )
+            
+            completion = self.groq_client.chat.completions.create(
+                model="compound-beta-mini",
+                messages=[
+                {
+                    "role": "system",
+                    "content": "You are a financial analyst AI. Provide objective stock analysis based on the given data. Only ouput JSON as your response, don't add any extra text. respond anything else"
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+                ],
+                temperature=1,
+                max_completion_tokens=1024,
+                top_p=1,
+                stream=True,
+                stop=None
+            )
+            analysis_text = ""
+            for chunk in completion:
+                analysis_text += chunk.choices[0].delta.content or ""
+
+            # Try to parse JSON response
+            try:
+                logger.info(f"API response for {analysis_text}")
+                analysis_json = json.loads(analysis_text)
+                score = max(0, min(100, int(analysis_json.get("score", 50))))
+                reason = analysis_json.get("reason", "AI analysis completed")
+            except json.JSONDecodeError:
+                # Fallback if AI doesn't return proper JSON
+                score = 50
+                reason = analysis_text[:200] if analysis_text else "AI analysis completed"
+            
+            return AIAnalysis(score=score, reason=reason)
+            
+        except Exception as e:
+            logger.error(f"OpenAI API error for {stock_data.symbol}: {e}")
+            return self._generate_mock_analysis(stock_data)
+
+    def _get_real_analysis_open_ai(self, stock_data: StockData) -> AIAnalysis:
         """Get real AI analysis using OpenAI."""
         try:
             # Format the prompt with stock data

@@ -4,7 +4,7 @@ const API_BASE_URL = 'http://localhost:8000/api/v1'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 100000,
 })
 
 export const fetchDashboard = async () => {

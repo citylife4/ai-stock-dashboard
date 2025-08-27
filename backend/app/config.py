@@ -6,6 +6,7 @@ load_dotenv()
 class Config:
     # OpenAI Configuration
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
     
     # Server Configuration
     HOST = os.getenv("HOST", "localhost")
