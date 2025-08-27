@@ -28,3 +28,37 @@ class DashboardResponse(BaseModel):
     stocks: List[StockAnalysis]
     last_updated: datetime
     total_stocks: int
+
+
+# Admin models
+class AdminLoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class AdminLoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class AdminStockRequest(BaseModel):
+    symbol: str
+
+
+class AdminPromptRequest(BaseModel):
+    ai_analysis_prompt: Optional[str] = None
+
+
+class AdminPromptResponse(BaseModel):
+    ai_analysis_prompt: str
+
+
+class AdminStockListResponse(BaseModel):
+    symbols: List[str]
+
+
+class AdminActionLog(BaseModel):
+    timestamp: datetime
+    action: str  # "add_stock", "remove_stock", "update_prompt"
+    details: str
+    admin_user: str

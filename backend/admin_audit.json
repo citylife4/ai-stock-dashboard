@@ -1,0 +1,8 @@
+[
+  {
+    "timestamp": "2025-08-27 22:30:58.314814",
+    "action": "admin_login",
+    "details": "Admin admin logged in",
+    "admin_user": "admin"
+  }
+]

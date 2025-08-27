@@ -50,8 +50,11 @@ class SchedulerService:
         logger.info("Starting stock analysis update...")
         
         try:
+            # Get current stock symbols from dynamic config
+            stock_symbols = config.get_stock_symbols()
+            
             # Fetch stock data
-            stock_data_list = self.stock_service.fetch_multiple_stocks(config.STOCK_SYMBOLS)
+            stock_data_list = self.stock_service.fetch_multiple_stocks(stock_symbols)
             
             # Analyze each stock
             analysis_results = []

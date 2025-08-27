@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 import logging
 
 from .api.routes import router, set_scheduler_service
+from .api.admin_routes import router as admin_router
 from .services.scheduler import SchedulerService
 from .config import config
 
@@ -58,6 +59,7 @@ app.add_middleware(
 
 # Include API routes
 app.include_router(router, prefix="/api/v1")
+app.include_router(admin_router, prefix="/api/v1")
 
 
 @app.get("/")

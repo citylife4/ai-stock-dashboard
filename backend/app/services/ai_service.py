@@ -36,7 +36,7 @@ class AIService:
         """Get real AI analysis using OpenAI."""
         try:
             # Format the prompt with stock data
-            prompt = config.AI_ANALYSIS_PROMPT.format(
+            prompt = config.get_ai_analysis_prompt().format(
                 symbol=stock_data.symbol,
                 current_price=stock_data.current_price,
                 previous_close=stock_data.previous_close,
@@ -88,7 +88,7 @@ class AIService:
         """Get real AI analysis using OpenAI."""
         try:
             # Format the prompt with stock data
-            prompt = config.AI_ANALYSIS_PROMPT.format(
+            prompt = config.get_ai_analysis_prompt().format(
                 symbol=stock_data.symbol,
                 current_price=stock_data.current_price,
                 previous_close=stock_data.previous_close,
