@@ -41,8 +41,18 @@ class UserService:
             result = await self.db.users.insert_one(user_doc)
             
             if result.inserted_id:
-                user_doc["id"] = str(result.inserted_id)
-                return User(**user_doc)
+                # Remove password_hash before creating User object and convert subscription_tier back to enum
+                user_response_doc = {
+                    "id": str(result.inserted_id),
+                    "username": user_doc["username"],
+                    "email": user_doc["email"],
+                    "subscription_tier": user_data.subscription_tier,  # Use original enum
+                    "max_stocks": user_doc["max_stocks"],
+                    "created_at": user_doc["created_at"],
+                    "updated_at": user_doc["updated_at"],
+                    "is_active": user_doc["is_active"]
+                }
+                return User(**user_response_doc)
                 
         except Exception as e:
             logger.error(f"Error creating user: {e}")
@@ -56,8 +66,18 @@ class UserService:
         try:
             user_doc = await self.db.users.find_one({"email": email})
             if user_doc:
-                user_doc["id"] = str(user_doc["_id"])
-                return User(**user_doc)
+                # Convert to User object, handling subscription_tier enum conversion
+                user_response_doc = {
+                    "id": str(user_doc["_id"]),
+                    "username": user_doc["username"],
+                    "email": user_doc["email"],
+                    "subscription_tier": SubscriptionTier(user_doc["subscription_tier"]),
+                    "max_stocks": user_doc["max_stocks"],
+                    "created_at": user_doc["created_at"],
+                    "updated_at": user_doc["updated_at"],
+                    "is_active": user_doc["is_active"]
+                }
+                return User(**user_response_doc)
         except Exception as e:
             logger.error(f"Error getting user by email: {e}")
             return None
@@ -70,8 +90,18 @@ class UserService:
         try:
             user_doc = await self.db.users.find_one({"_id": ObjectId(user_id)})
             if user_doc:
-                user_doc["id"] = str(user_doc["_id"])
-                return User(**user_doc)
+                # Convert to User object, handling subscription_tier enum conversion
+                user_response_doc = {
+                    "id": str(user_doc["_id"]),
+                    "username": user_doc["username"],
+                    "email": user_doc["email"],
+                    "subscription_tier": SubscriptionTier(user_doc["subscription_tier"]),
+                    "max_stocks": user_doc["max_stocks"],
+                    "created_at": user_doc["created_at"],
+                    "updated_at": user_doc["updated_at"],
+                    "is_active": user_doc["is_active"]
+                }
+                return User(**user_response_doc)
         except Exception as e:
             logger.error(f"Error getting user by ID: {e}")
             return None

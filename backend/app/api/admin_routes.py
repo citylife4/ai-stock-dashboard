@@ -6,10 +6,12 @@ from typing import List
 from ..models import (
     AdminLoginRequest, AdminLoginResponse, AdminStockRequest, 
     AdminPromptRequest, AdminPromptResponse, AdminStockListResponse,
-    AdminConfigRequest, AdminConfigResponse
+    AdminConfigRequest, AdminConfigResponse, AdminUserResponse, AdminUserUpdate,
+    SubscriptionTier
 )
 from ..services.auth_service import AuthService
 from ..services.audit_service import AuditService
+from ..services.user_service import UserService, UserStockService
 from ..config import config
 from .routes import get_scheduler_service
 
@@ -19,6 +21,8 @@ security = HTTPBearer()
 # Services
 auth_service = AuthService()
 audit_service = AuditService()
+user_service = UserService()
+user_stock_service = UserStockService()
 
 
 def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -332,3 +336,106 @@ async def force_refresh(current_admin: str = Depends(get_current_admin)):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error forcing refresh: {str(e)}")
+
+
+# User Management Routes
+
+@router.get("/users", response_model=List[AdminUserResponse])
+async def get_all_users(
+    skip: int = 0,
+    limit: int = 100,
+    current_admin: str = Depends(get_current_admin)
+):
+    """Get all users for admin management."""
+    try:
+        users = await user_service.get_all_users(skip=skip, limit=limit)
+        return users
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving users: {str(e)}")
+
+
+@router.put("/users/{user_id}")
+async def update_user(
+    user_id: str,
+    update_data: AdminUserUpdate,
+    current_admin: str = Depends(get_current_admin)
+):
+    """Update user subscription tier and settings."""
+    try:
+        success = await user_service.update_user_admin(user_id, update_data)
+        if not success:
+            raise HTTPException(status_code=404, detail="User not found or update failed")
+        
+        # Log the action
+        changes = []
+        if update_data.subscription_tier:
+            changes.append(f"subscription_tier={update_data.subscription_tier.value}")
+        if update_data.max_stocks is not None:
+            changes.append(f"max_stocks={update_data.max_stocks}")
+        if update_data.is_active is not None:
+            changes.append(f"is_active={update_data.is_active}")
+        
+        audit_service.log_action(
+            "update_user",
+            f"Updated user {user_id}: {', '.join(changes)}",
+            current_admin
+        )
+        
+        return {"message": "User updated successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating user: {str(e)}")
+
+
+@router.get("/users/{user_id}/stocks")
+async def get_user_stocks(
+    user_id: str,
+    current_admin: str = Depends(get_current_admin)
+):
+    """Get stocks tracked by a specific user."""
+    try:
+        stocks = await user_stock_service.get_user_stocks(user_id)
+        return {"symbols": stocks}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving user stocks: {str(e)}")
+
+
+@router.get("/stats")
+async def get_admin_stats(current_admin: str = Depends(get_current_admin)):
+    """Get system statistics for admin dashboard."""
+    try:
+        # Get all users to calculate stats
+        all_users = await user_service.get_all_users(skip=0, limit=1000)
+        
+        # Calculate subscription tier distribution
+        tier_stats = {
+            "free": 0,
+            "pro": 0,
+            "expert": 0
+        }
+        
+        active_users = 0
+        total_stocks_tracked = 0
+        
+        for user in all_users:
+            tier_stats[user.subscription_tier.value] += 1
+            if user.is_active:
+                active_users += 1
+            total_stocks_tracked += user.stock_count
+        
+        # Get unique symbols being tracked
+        unique_symbols = await user_stock_service.get_all_tracked_symbols()
+        
+        return {
+            "total_users": len(all_users),
+            "active_users": active_users,
+            "subscription_tiers": tier_stats,
+            "total_stocks_tracked": total_stocks_tracked,
+            "unique_symbols_tracked": len(unique_symbols),
+            "symbols": unique_symbols
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving stats: {str(e)}")
