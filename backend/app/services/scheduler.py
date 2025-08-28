@@ -3,6 +3,9 @@ from apscheduler.triggers.interval import IntervalTrigger
 from datetime import datetime
 from typing import List, Dict, Optional
 import logging
+import asyncio
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 from .stock_service import StockService
 from .ai_service import AIService
@@ -21,6 +24,8 @@ class SchedulerService:
         self.latest_analysis: List[StockAnalysis] = []
         self.last_updated = None
         self.latest_errors: List[Dict[str, str]] = []  # Store latest errors for frontend display
+        self.is_updating = False  # Track if update is in progress
+        self.executor = ThreadPoolExecutor(max_workers=4)  # For parallel processing
         
     def start(self):
         """Start the scheduler."""
@@ -45,63 +50,90 @@ class SchedulerService:
     def stop(self):
         """Stop the scheduler."""
         self.scheduler.shutdown()
+        self.executor.shutdown(wait=True)
         logger.info("Scheduler stopped")
     
+    def analyze_single_stock(self, symbol: str) -> Optional[StockAnalysis]:
+        """Analyze a single stock symbol - runs in thread pool."""
+        try:
+            # Fetch stock data
+            stock_data = self.stock_service.fetch_stock_data(symbol)
+            if not stock_data:
+                error_msg = f"No stock data available for {symbol}"
+                logger.error(error_msg)
+                return None
+                
+            # Analyze stock
+            ai_analysis = self.ai_service.analyze_stock(stock_data)
+            stock_analysis = StockAnalysis(
+                stock_data=stock_data,
+                ai_analysis=ai_analysis,
+                timestamp=datetime.now()
+            )
+            logger.info(f"Analyzed {stock_data.symbol}: Score {ai_analysis.score}")
+            return stock_analysis
+            
+        except StockDataException as e:
+            logger.error(f"Stock data error for {symbol}: {e}")
+            return None
+            
+        except AIAnalysisException as e:
+            logger.error(f"AI analysis error for {symbol}: {e}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Unexpected error analyzing {symbol}: {e}")
+            return None
+    
     def update_stock_analysis(self):
-        """Update stock analysis for all configured symbols."""
+        """Update stock analysis for all configured symbols - non-blocking."""
+        if self.is_updating:
+            logger.info("Stock analysis update already in progress, skipping...")
+            return
+            
+        # Run the actual update in a separate thread to avoid blocking
+        thread = threading.Thread(target=self._update_stock_analysis_async, daemon=True)
+        thread.start()
+    
+    def _update_stock_analysis_async(self):
+        """Internal method that runs the actual analysis asynchronously."""
         logger.info("Starting stock analysis update...")
-        
-        # Clear previous errors
-        self.latest_errors = []
+        self.is_updating = True
         
         try:
+            # Clear previous errors
+            self.latest_errors = []
+            
             # Get current stock symbols from dynamic config
             stock_symbols = config.get_stock_symbols()
             
-            # Analyze each stock individually to collect specific errors
+            # Use ThreadPoolExecutor for parallel processing
             analysis_results = []
-            for symbol in stock_symbols:
+            error_count = 0
+            
+            # Submit all stock analysis tasks to thread pool
+            future_to_symbol = {
+                self.executor.submit(self.analyze_single_stock, symbol): symbol 
+                for symbol in stock_symbols
+            }
+            
+            # Collect results as they complete
+            for future in future_to_symbol:
+                symbol = future_to_symbol[future]
                 try:
-                    # Fetch stock data
-                    stock_data = self.stock_service.fetch_stock_data(symbol)
-                    if not stock_data:
-                        error_msg = f"No stock data available for {symbol}"
+                    result = future.result(timeout=30)  # 30 second timeout per stock
+                    if result:
+                        analysis_results.append(result)
+                    else:
+                        error_count += 1
                         self.latest_errors.append({
                             "type": "stock_data",
                             "symbol": symbol,
-                            "message": error_msg
+                            "message": f"Failed to analyze {symbol}"
                         })
-                        logger.error(error_msg)
-                        continue
-                        
-                    # Analyze stock
-                    ai_analysis = self.ai_service.analyze_stock(stock_data)
-                    stock_analysis = StockAnalysis(
-                        stock_data=stock_data,
-                        ai_analysis=ai_analysis,
-                        timestamp=datetime.now()
-                    )
-                    analysis_results.append(stock_analysis)
-                    logger.info(f"Analyzed {stock_data.symbol}: Score {ai_analysis.score}")
-                    
-                except StockDataException as e:
-                    self.latest_errors.append({
-                        "type": "stock_data",
-                        "symbol": symbol,
-                        "message": str(e)
-                    })
-                    logger.error(f"Stock data error for {symbol}: {e}")
-                    
-                except AIAnalysisException as e:
-                    self.latest_errors.append({
-                        "type": "ai_analysis", 
-                        "symbol": symbol,
-                        "message": str(e)
-                    })
-                    logger.error(f"AI analysis error for {symbol}: {e}")
-                    
                 except Exception as e:
-                    error_msg = f"Unexpected error analyzing {symbol}: {e}"
+                    error_count += 1
+                    error_msg = f"Error analyzing {symbol}: {str(e)}"
                     self.latest_errors.append({
                         "type": "general",
                         "symbol": symbol,
@@ -112,7 +144,7 @@ class SchedulerService:
             # Sort by AI score (highest first)
             analysis_results.sort(key=lambda x: x.ai_analysis.score, reverse=True)
             
-            # Update stored results
+            # Update stored results atomically
             self.latest_analysis = analysis_results
             self.last_updated = datetime.now()
             
@@ -132,23 +164,29 @@ class SchedulerService:
                 "message": error_msg
             })
             logger.error(error_msg)
+        finally:
+            self.is_updating = False
     
     def get_latest_analysis(self) -> List[StockAnalysis]:
         """Get the latest stock analysis results."""
         return self.latest_analysis
     
-    def get_last_updated(self) -> datetime:
+    def get_last_updated(self) -> Optional[datetime]:
         """Get the timestamp of the last update."""
         return self.last_updated
     
     def force_update(self):
-        """Force an immediate update of stock analysis."""
+        """Force an immediate update of stock analysis - non-blocking."""
         logger.info("Forcing immediate stock analysis update...")
-        self.update_stock_analysis()
+        self.update_stock_analysis()  # This is now non-blocking
     
     def get_latest_errors(self) -> List[Dict[str, str]]:
         """Get the latest errors from stock analysis."""
         return self.latest_errors
+    
+    def is_update_in_progress(self) -> bool:
+        """Check if an update is currently in progress."""
+        return self.is_updating
     
     def refresh_stock_service(self):
         """Refresh the stock service configuration - call when data source changes."""
