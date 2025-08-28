@@ -4,6 +4,7 @@ from typing import Optional
 import openai
 from ..models import StockData, AIAnalysis
 from ..config import config
+from ..exceptions import OpenAIException, GroqException
 import logging
 from groq import Groq
 
@@ -22,15 +23,37 @@ class AIService:
         """Analyze stock data using AI or mock analysis."""
         try:
             if self.use_mock_analysis:
-                return self._generate_mock_analysis(stock_data)
+                if config.DEBUG:
+                    # In development, use mock analysis
+                    return self._generate_mock_analysis(stock_data)
+                else:
+                    # In production, raise exception if no AI API is available
+                    if not config.OPENAI_API_KEY and not config.GROQ_API_KEY:
+                        raise OpenAIException("No AI API keys configured for stock analysis")
+                    elif config.GROQ_API_KEY:
+                        raise GroqException("Groq API not available but was expected")
+                    else:
+                        raise OpenAIException("OpenAI API not available but was expected")
             else:
                 if config.GROQ_API_KEY:
                     return self._get_real_analysis_groq(stock_data)
                 else:
                     return self._get_real_analysis_open_ai(stock_data)
+        except (OpenAIException, GroqException):
+            # Re-raise these exceptions so they bubble up
+            raise
         except Exception as e:
-            logger.error(f"Error analyzing stock {stock_data.symbol}: {e}")
-            return self._generate_mock_analysis(stock_data)
+            error_msg = f"Error analyzing stock {stock_data.symbol}: {e}"
+            logger.error(error_msg)
+            if config.DEBUG:
+                # In development, fall back to mock analysis
+                return self._generate_mock_analysis(stock_data)
+            else:
+                # In production, raise exception with details
+                if config.GROQ_API_KEY:
+                    raise GroqException(f"Groq AI analysis failed for {stock_data.symbol}: {str(e)}")
+                else:
+                    raise OpenAIException(f"OpenAI analysis failed for {stock_data.symbol}: {str(e)}")
        
     def _get_real_analysis_groq(self, stock_data: StockData) -> AIAnalysis:
         """Get real AI analysis using OpenAI."""
@@ -81,8 +104,12 @@ class AIService:
             return AIAnalysis(score=score, reason=reason)
             
         except Exception as e:
-            logger.error(f"OpenAI API error for {stock_data.symbol}: {e}")
-            return self._generate_mock_analysis(stock_data)
+            error_msg = f"Groq API error for {stock_data.symbol}: {e}"
+            logger.error(error_msg)
+            if config.DEBUG:
+                return self._generate_mock_analysis(stock_data)
+            else:
+                raise GroqException(error_msg)
 
     def _get_real_analysis_open_ai(self, stock_data: StockData) -> AIAnalysis:
         """Get real AI analysis using OpenAI."""
@@ -125,8 +152,12 @@ class AIService:
             return AIAnalysis(score=score, reason=reason)
             
         except Exception as e:
-            logger.error(f"OpenAI API error for {stock_data.symbol}: {e}")
-            return self._generate_mock_analysis(stock_data)
+            error_msg = f"OpenAI API error for {stock_data.symbol}: {e}"
+            logger.error(error_msg)
+            if config.DEBUG:
+                return self._generate_mock_analysis(stock_data)
+            else:
+                raise OpenAIException(error_msg)
     
     def _generate_mock_analysis(self, stock_data: StockData) -> AIAnalysis:
         """Generate realistic mock AI analysis."""

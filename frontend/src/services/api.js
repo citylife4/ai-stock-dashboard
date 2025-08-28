@@ -148,3 +148,33 @@ export const getAuditLogs = async (limit = 100) => {
     throw error
   }
 }
+
+export const getConfig = async () => {
+  try {
+    const response = await api.get('/admin/config')
+    return response.data
+  } catch (error) {
+    console.error('Error fetching config:', error)
+    throw error
+  }
+}
+
+export const updateConfig = async (config) => {
+  try {
+    const response = await api.put('/admin/config', config)
+    return response.data
+  } catch (error) {
+    console.error('Error updating config:', error)
+    throw error
+  }
+}
+
+export const forceRefresh = async () => {
+  try {
+    const response = await api.post('/admin/refresh')
+    return response.data
+  } catch (error) {
+    console.error('Error forcing refresh:', error)
+    throw error
+  }
+}

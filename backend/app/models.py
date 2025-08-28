@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict
 from pydantic import BaseModel
 
 
@@ -24,10 +24,17 @@ class StockAnalysis(BaseModel):
     timestamp: datetime
 
 
+class ApiError(BaseModel):
+    type: str  # "stock_data", "ai_analysis", "general"
+    symbol: str
+    message: str
+
+
 class DashboardResponse(BaseModel):
     stocks: List[StockAnalysis]
     last_updated: datetime
     total_stocks: int
+    errors: List[ApiError] = []  # Include API errors in dashboard response
 
 
 # Admin models
@@ -47,6 +54,16 @@ class AdminStockRequest(BaseModel):
 
 class AdminPromptRequest(BaseModel):
     ai_analysis_prompt: Optional[str] = None
+
+
+class AdminConfigRequest(BaseModel):
+    data_source: Optional[str] = None  # "yahoo" or "alpha_vantage"
+    alpha_vantage_api_key: Optional[str] = None
+
+
+class AdminConfigResponse(BaseModel):
+    data_source: str
+    alpha_vantage_api_key: str
 
 
 class AdminPromptResponse(BaseModel):

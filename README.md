@@ -6,7 +6,7 @@ AI-powered website that periodically analyzes stocks, runs AI queries to generat
 
 ## 🚀 Features
 
-- **Real-time Stock Analysis**: Fetches stock data from Yahoo Finance API with mock data fallback
+- **Real-time Stock Analysis**: Fetches stock data from Alpha Vantage API with mock data fallback
 - **AI-Powered Scoring**: Uses OpenAI GPT to analyze stocks and provide investment scores (0-100)
 - **Periodic Updates**: Automatically refreshes stock data and analysis every 30 minutes
 - **Beautiful Dashboard**: Modern, responsive UI with gradient backgrounds and interactive cards
@@ -19,7 +19,7 @@ AI-powered website that periodically analyzes stocks, runs AI queries to generat
 ### Backend
 - **Python 3.8+** with FastAPI
 - **uvicorn** for ASGI server
-- **yfinance** for stock data
+- **alpha-vantage** for stock data
 - **OpenAI API** for AI analysis
 - **APScheduler** for periodic tasks
 - **Pydantic** for data validation
@@ -101,6 +101,9 @@ Create a `.env` file in the `backend` directory:
 # OpenAI API Key (optional - will use mock data if not provided)
 OPENAI_API_KEY=your_openai_api_key_here
 
+# Alpha Vantage API Key (required for stock data)
+ALPHA_VANTAGE_API_KEY=your_alpha_vantage_api_key_here
+
 # Server configuration
 HOST=localhost
 PORT=8000
@@ -129,7 +132,7 @@ UPDATE_INTERVAL = 30  # Update every 30 minutes
 
 ## 🎯 How It Works
 
-1. **Stock Data Fetching**: The application fetches real-time stock data using yfinance API
+1. **Stock Data Fetching**: The application fetches real-time stock data using Alpha Vantage API
 2. **AI Analysis**: Each stock is analyzed using OpenAI GPT with a structured prompt
 3. **Scoring System**: AI provides scores (0-100) based on various factors:
    - Recent price performance

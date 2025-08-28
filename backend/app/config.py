@@ -10,6 +10,9 @@ class Config:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
     
+    # Alpha Vantage Configuration (fallback from environment)
+    ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
+    
     # Server Configuration
     HOST = os.getenv("HOST", "localhost")
     PORT = int(os.getenv("PORT", 8000))
@@ -67,7 +70,9 @@ class Config:
         # Return default configuration
         return {
             "stock_symbols": cls._DEFAULT_STOCK_SYMBOLS,
-            "ai_analysis_prompt": cls._DEFAULT_AI_ANALYSIS_PROMPT.strip()
+            "ai_analysis_prompt": cls._DEFAULT_AI_ANALYSIS_PROMPT.strip(),
+            "data_source": "yahoo",  # Default to Yahoo Finance
+            "alpha_vantage_api_key": cls.ALPHA_VANTAGE_API_KEY or ""
         }
     
     @classmethod
@@ -105,6 +110,34 @@ class Config:
         """Update AI analysis prompt in dynamic config."""
         config_data = cls.load_dynamic_config()
         config_data["ai_analysis_prompt"] = prompt
+        return cls.save_dynamic_config(config_data)
+    
+    @classmethod
+    def get_data_source(cls) -> str:
+        """Get current data source from dynamic config."""
+        config_data = cls.load_dynamic_config()
+        return config_data.get("data_source", "yahoo")
+    
+    @classmethod
+    def get_alpha_vantage_api_key(cls) -> str:
+        """Get Alpha Vantage API key from dynamic config or environment."""
+        config_data = cls.load_dynamic_config()
+        return config_data.get("alpha_vantage_api_key") or cls.ALPHA_VANTAGE_API_KEY or ""
+    
+    @classmethod
+    def update_data_source(cls, data_source: str) -> bool:
+        """Update data source in dynamic config."""
+        if data_source not in ["yahoo", "alpha_vantage"]:
+            return False
+        config_data = cls.load_dynamic_config()
+        config_data["data_source"] = data_source
+        return cls.save_dynamic_config(config_data)
+    
+    @classmethod
+    def update_alpha_vantage_api_key(cls, api_key: str) -> bool:
+        """Update Alpha Vantage API key in dynamic config."""
+        config_data = cls.load_dynamic_config()
+        config_data["alpha_vantage_api_key"] = api_key
         return cls.save_dynamic_config(config_data)
 
 

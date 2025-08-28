@@ -5,7 +5,8 @@ from typing import List
 
 from ..models import (
     AdminLoginRequest, AdminLoginResponse, AdminStockRequest, 
-    AdminPromptRequest, AdminPromptResponse, AdminStockListResponse
+    AdminPromptRequest, AdminPromptResponse, AdminStockListResponse,
+    AdminConfigRequest, AdminConfigResponse
 )
 from ..services.auth_service import AuthService
 from ..services.audit_service import AuditService
@@ -211,3 +212,81 @@ async def get_audit_logs(
         return {"logs": logs}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving audit logs: {str(e)}")
+
+
+@router.get("/config", response_model=AdminConfigResponse)
+async def get_config(current_admin: str = Depends(get_current_admin)):
+    """Get current data source and API key configuration."""
+    try:
+        data_source = config.get_data_source()
+        api_key = config.get_alpha_vantage_api_key()
+        return AdminConfigResponse(data_source=data_source, alpha_vantage_api_key=api_key)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving configuration: {str(e)}")
+
+
+@router.put("/config")
+async def update_config(
+    request: AdminConfigRequest,
+    current_admin: str = Depends(get_current_admin)
+):
+    """Update data source and API key configuration."""
+    try:
+        updated = False
+        
+        if request.data_source is not None:
+            if request.data_source not in ["yahoo", "alpha_vantage"]:
+                raise HTTPException(status_code=400, detail="Invalid data source. Must be 'yahoo' or 'alpha_vantage'")
+            
+            if not config.update_data_source(request.data_source):
+                raise HTTPException(status_code=500, detail="Failed to update data source")
+            
+            audit_service.log_action(
+                "update_data_source", 
+                f"Changed data source to {request.data_source}", 
+                current_admin
+            )
+            updated = True
+        
+        if request.alpha_vantage_api_key is not None:
+            if not config.update_alpha_vantage_api_key(request.alpha_vantage_api_key):
+                raise HTTPException(status_code=500, detail="Failed to update Alpha Vantage API key")
+            
+            audit_service.log_action(
+                "update_api_key", 
+                "Updated Alpha Vantage API key", 
+                current_admin
+            )
+            updated = True
+        
+        if updated:
+            # Force update to use new configuration immediately
+            scheduler_service = get_scheduler_service()
+            scheduler_service.refresh_stock_service()  # Need to add this method
+            scheduler_service.force_update()
+        
+        return {"message": "Configuration updated successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating configuration: {str(e)}")
+
+
+@router.post("/refresh")
+async def force_refresh(current_admin: str = Depends(get_current_admin)):
+    """Force refresh of stock data (admin only)."""
+    try:
+        scheduler_service = get_scheduler_service()
+        scheduler_service.force_update()
+        
+        audit_service.log_action(
+            "force_refresh", 
+            "Manually triggered stock data refresh", 
+            current_admin
+        )
+        
+        return {"message": "Stock data refresh initiated"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error forcing refresh: {str(e)}")
