@@ -63,6 +63,7 @@ class SchedulerService:
                 logger.error(error_msg)
                 return None
                 
+
             # Analyze stock with AI
             ai_analysis = self.ai_service.analyze_stock(stock_data)
             
@@ -94,10 +95,12 @@ class SchedulerService:
             logger.error(f"Unexpected error analyzing {symbol}: {e}")
             return None
     
+
     def is_update_in_progress(self) -> bool:
         """Check if stock analysis update is currently in progress."""
         return self.is_updating
     
+
     def update_stock_analysis(self):
         """Update stock analysis for all configured symbols - non-blocking."""
         if self.is_updating:
@@ -109,21 +112,25 @@ class SchedulerService:
         thread.start()
     
     def _update_stock_analysis_async(self):
+
         """Update stock analysis for all configured symbols - internal async method."""
         try:
             self.is_updating = True
             logger.info("Starting stock analysis update...")
             
+
             # Clear previous errors
             self.latest_errors = []
             
             # Get current stock symbols from dynamic config
             stock_symbols = config.get_stock_symbols()
             
+
             # Use ThreadPoolExecutor to analyze stocks in parallel
             analysis_results = []
             
             # Submit all stock analysis tasks to the thread pool
+
             future_to_symbol = {
                 self.executor.submit(self.analyze_single_stock, symbol): symbol 
                 for symbol in stock_symbols
@@ -139,6 +146,7 @@ class SchedulerService:
                         analysis_results.append(result)
                 except Exception as exc:
                     error_msg = f"Stock analysis generated an exception for {symbol}: {exc}"
+
                     self.latest_errors.append({
                         "type": "general",
                         "symbol": symbol,
@@ -149,7 +157,7 @@ class SchedulerService:
             # Sort by AI average score (highest first)
             analysis_results.sort(key=lambda x: x.ai_analysis.average_score, reverse=True)
             
-            # Update stored results
+            # Update stored results atomically
             self.latest_analysis = analysis_results
             self.last_updated = datetime.now()
             
@@ -176,18 +184,22 @@ class SchedulerService:
         """Get the latest stock analysis results."""
         return self.latest_analysis
     
-    def get_last_updated(self) -> datetime:
+    def get_last_updated(self) -> Optional[datetime]:
         """Get the timestamp of the last update."""
         return self.last_updated
     
     def force_update(self):
-        """Force an immediate update of stock analysis."""
+        """Force an immediate update of stock analysis - non-blocking."""
         logger.info("Forcing immediate stock analysis update...")
-        self.update_stock_analysis()
+        self.update_stock_analysis()  # This is now non-blocking
     
     def get_latest_errors(self) -> List[Dict[str, str]]:
         """Get the latest errors from stock analysis."""
         return self.latest_errors
+    
+    def is_update_in_progress(self) -> bool:
+        """Check if an update is currently in progress."""
+        return self.is_updating
     
     def refresh_stock_service(self):
         """Refresh the stock service configuration - call when data source changes."""

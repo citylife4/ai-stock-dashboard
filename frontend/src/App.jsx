@@ -6,6 +6,7 @@ import StockCard from './components/StockCard'
 import AdminLogin from './components/AdminLogin'
 import AdminDashboard from './components/AdminDashboard'
 import UserAuth from './components/UserAuth'
+
 import { fetchDashboard, refreshDashboard, getStatus, adminLogin, initializeAuth, getAuthToken } from './services/api'
 
 function Dashboard() {
@@ -138,7 +139,6 @@ function Dashboard() {
               <Clock size={16} />
               <span>Updated: {dashboardData?.last_updated ? formatLastUpdated(dashboardData.last_updated) : 'Never'}</span>
             </div>
-            
             {user ? (
               <div className="user-menu">
                 <div className="user-info">
@@ -161,7 +161,6 @@ function Dashboard() {
                 Login / Sign Up
               </button>
             )}
-            
             {isAuthenticated ? (
               <button 
                 onClick={() => navigate('/admin')}
