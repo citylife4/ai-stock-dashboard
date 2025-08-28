@@ -26,6 +26,15 @@ class Config:
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
     SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
     
+    # Database Configuration
+    MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+    DATABASE_NAME = os.getenv("DATABASE_NAME", "ai_stock_dashboard")
+    
+    # JWT Configuration
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "jwt-secret-key-change-in-production")
+    JWT_ALGORITHM = "HS256"
+    JWT_EXPIRATION_HOURS = 24
+    
     # Stock symbols to analyze (default values)
     _DEFAULT_STOCK_SYMBOLS = ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "NFLX"]
     
