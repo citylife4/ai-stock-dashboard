@@ -235,19 +235,29 @@ class UserService:
             return False
             
         try:
-            # Check if any admin user exists
-            admin_exists = await self.db.users.find_one({"is_admin": True})
+            # Check if admin user exists with correct email
+            admin_exists = await self.db.users.find_one({
+                "is_admin": True,
+                "email": email,
+                "username": username
+            })
             
             if not admin_exists:
+                # Check if admin exists with wrong email or different username
+                old_admin = await self.db.users.find_one({"is_admin": True})
+                if old_admin:
+                    logger.info(f"Removing old admin user with incorrect email: {old_admin.get('email')}")
+                    await self.db.users.delete_one({"_id": old_admin["_id"]})
+                
                 admin_user = await self.create_admin_user(username, email, password)
                 if admin_user:
-                    logger.info(f"Created admin user: {username}")
+                    logger.info(f"Created admin user: {username} with email: {email}")
                     return True
                 else:
                     logger.error("Failed to create admin user")
                     return False
             else:
-                logger.info("Admin user already exists")
+                logger.info(f"Admin user already exists: {username}")
                 return True
                 
         except Exception as e:

@@ -37,7 +37,7 @@ async def lifespan(app: FastAPI):
     user_service = UserService()
     await user_service.ensure_admin_user_exists(
         username=config.ADMIN_USERNAME,
-        email=f"{config.ADMIN_USERNAME}@admin.local",
+        email=f"{config.ADMIN_USERNAME}@admin.com",
         password=config.ADMIN_PASSWORD
     )
     

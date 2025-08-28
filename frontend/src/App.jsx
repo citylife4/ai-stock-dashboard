@@ -3,12 +3,11 @@ import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react
 import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Clock, Settings, User, LogOut, List } from 'lucide-react'
 import './App.css'
 import StockCard from './components/StockCard'
-import AdminLogin from './components/AdminLogin'
 import AdminDashboard from './components/AdminDashboard'
 import UserAuth from './components/UserAuth'
 import UserStockManager from './components/UserStockManager'
 
-import { fetchDashboard, refreshDashboard, getStatus, adminLogin, initializeAuth, getAuthToken, initializeUserAuth, getCurrentUser, logout } from './services/api'
+import { fetchDashboard, refreshDashboard, getStatus, initializeAuth, getAuthToken, initializeUserAuth, getCurrentUser, logout } from './services/api'
 
 function Dashboard() {
   const [dashboardData, setDashboardData] = useState(null)
@@ -176,7 +175,7 @@ function Dashboard() {
                 Login / Sign Up
               </button>
             )}
-            {(isAuthenticated || isUserAdmin()) ? (
+            {isUserAdmin() ? (
               <button 
                 onClick={() => navigate('/admin')}
                 className="admin-btn"
@@ -184,12 +183,7 @@ function Dashboard() {
                 <Settings size={16} />
                 Admin
               </button>
-            ) : (
-              <Link to="/admin/login" className="admin-link">
-                <Settings size={16} />
-                Admin
-              </Link>
-            )}
+            ) : null}
           </div>
         </div>
       </header>
@@ -281,33 +275,38 @@ function Dashboard() {
   )
 }
 
-function AdminLoginPage() {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const navigate = useNavigate()
-
-  const handleLogin = async (username, password) => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      await adminLogin(username, password)
-      navigate('/admin')
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return <AdminLogin onLogin={handleLogin} error={error} loading={loading} />
-}
-
 function AdminPage() {
   const navigate = useNavigate()
+  const [user, setUser] = useState(null)
+
+  // Check if user is logged in and is admin
+  useEffect(() => {
+    const checkAdminAccess = async () => {
+      try {
+        const currentUser = await getCurrentUser()
+        if (!currentUser || !currentUser.is_admin) {
+          // Not an admin, redirect to home
+          navigate('/')
+          return
+        }
+        setUser(currentUser)
+      } catch (error) {
+        // Not logged in or invalid token, redirect to home
+        navigate('/')
+      }
+    }
+
+    checkAdminAccess()
+  }, [navigate])
 
   const handleLogout = () => {
+    logout()
     navigate('/')
+  }
+
+  // Show loading while checking admin access
+  if (!user) {
+    return <div>Loading...</div>
   }
 
   return <AdminDashboard onLogout={handleLogout} />
@@ -323,7 +322,6 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route path="/admin" element={<AdminPage />} />
       </Routes>
     </Router>

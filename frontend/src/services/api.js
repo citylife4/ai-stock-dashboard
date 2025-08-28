@@ -63,19 +63,6 @@ export const getStockAnalysis = async (symbol) => {
 }
 
 // Admin API functions
-export const adminLogin = async (username, password) => {
-  try {
-    const response = await api.post('/admin/login', { username, password })
-    const { access_token } = response.data
-    setAuthToken(access_token)
-    localStorage.setItem('adminToken', access_token)
-    return response.data
-  } catch (error) {
-    console.error('Error logging in:', error)
-    throw error
-  }
-}
-
 export const adminLogout = () => {
   setAuthToken(null)
   localStorage.removeItem('adminToken')

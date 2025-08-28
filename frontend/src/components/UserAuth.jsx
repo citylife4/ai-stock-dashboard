@@ -7,7 +7,8 @@ function UserAuth({ onLogin, onClose }) {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
-    password: ''
+    password: '',
+    subscription_tier: 'free'
   })
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -33,7 +34,16 @@ function UserAuth({ onLogin, onClose }) {
         })
 
         if (!response.ok) {
-          throw new Error('Invalid email or password')
+          const errorData = await response.json()
+          
+          // Handle validation errors (422) which come as an array
+          if (Array.isArray(errorData.detail)) {
+            const errorMessages = errorData.detail.map(err => err.msg).join(', ')
+            throw new Error(errorMessages)
+          }
+          
+          // Handle other errors
+          throw new Error(errorData.detail || 'Invalid email or password')
         }
 
         const data = await response.json()
@@ -53,6 +63,14 @@ function UserAuth({ onLogin, onClose }) {
 
         if (!response.ok) {
           const errorData = await response.json()
+          
+          // Handle validation errors (422) which come as an array
+          if (Array.isArray(errorData.detail)) {
+            const errorMessages = errorData.detail.map(err => err.msg).join(', ')
+            throw new Error(errorMessages)
+          }
+          
+          // Handle other errors
           throw new Error(errorData.detail || 'Registration failed')
         }
 
@@ -128,7 +146,7 @@ function UserAuth({ onLogin, onClose }) {
                 value={formData.username}
                 onChange={handleInputChange}
                 required={!isLoginMode}
-                placeholder="Enter your username"
+                placeholder="Enter your username (3+ characters)"
               />
             </div>
           )}
@@ -156,7 +174,7 @@ function UserAuth({ onLogin, onClose }) {
                 value={formData.password}
                 onChange={handleInputChange}
                 required
-                placeholder="Enter your password"
+                placeholder={isLoginMode ? "Enter your password" : "8+ characters, letters & numbers"}
               />
               <button
                 type="button"
@@ -167,6 +185,23 @@ function UserAuth({ onLogin, onClose }) {
               </button>
             </div>
           </div>
+
+          {!isLoginMode && (
+            <div className="form-group">
+              <label htmlFor="subscription_tier">Subscription Plan</label>
+              <select
+                id="subscription_tier"
+                name="subscription_tier"
+                value={formData.subscription_tier}
+                onChange={handleInputChange}
+                required={!isLoginMode}
+              >
+                <option value="free">Free (5 stocks)</option>
+                <option value="pro">Pro (10 stocks)</option>
+                <option value="expert">Expert (20 stocks)</option>
+              </select>
+            </div>
+          )}
 
           <button type="submit" className="auth-submit" disabled={loading}>
             {loading ? 'Please wait...' : (isLoginMode ? 'Sign In' : 'Create Account')}

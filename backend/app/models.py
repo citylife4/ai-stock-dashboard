@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List, Dict
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, validator
 from enum import Enum
 
 
@@ -21,15 +21,31 @@ class AIModelType(str, Enum):
 
 # User Models
 class UserCreate(BaseModel):
-    username: str
-    email: EmailStr
-    password: str
+    username: str = Field(..., min_length=3, max_length=50, description="Username must be between 3 and 50 characters")
+    email: EmailStr = Field(..., description="Valid email address required")
+    password: str = Field(..., min_length=8, description="Password must be at least 8 characters long")
     subscription_tier: SubscriptionTier = SubscriptionTier.FREE
+    
+    @validator('username')
+    def validate_username(cls, v):
+        if not v.replace('_', '').replace('-', '').isalnum():
+            raise ValueError('Username can only contain letters, numbers, underscores, and hyphens')
+        return v.lower()
+    
+    @validator('password')
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters long')
+        if not any(c.isalpha() for c in v):
+            raise ValueError('Password must contain at least one letter')
+        if not any(c.isdigit() for c in v):
+            raise ValueError('Password must contain at least one number')
+        return v
 
 
 class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
+    email: EmailStr = Field(..., description="Valid email address required")
+    password: str = Field(..., min_length=1, description="Password required")
 
 
 class User(BaseModel):
@@ -111,16 +127,6 @@ class DashboardResponse(BaseModel):
 
 
 # Admin models
-class AdminLoginRequest(BaseModel):
-    username: str
-    password: str
-
-
-class AdminLoginResponse(BaseModel):
-    access_token: str
-    token_type: str
-
-
 class AdminStockRequest(BaseModel):
     symbol: str
 
