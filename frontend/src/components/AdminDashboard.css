@@ -528,3 +528,77 @@
     flex-direction: column;
   }
 }
+
+/* Section divider styles */
+.section-divider {
+  margin: 2rem 0 1.5rem 0;
+  padding-top: 1.5rem;
+  border-top: 2px solid #e2e8f0;
+}
+
+.section-divider h3 {
+  margin: 0 0 0.5rem 0;
+  color: #2d3748;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.section-divider p {
+  margin: 0;
+  color: #718096;
+  font-size: 0.9rem;
+}
+
+/* Custom model selection styles */
+.model-selection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.model-toggle {
+  margin-bottom: 0.5rem;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #4a5568;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-label input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: #667eea;
+  cursor: pointer;
+}
+
+.custom-model-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  background: white;
+}
+
+.custom-model-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.custom-model-input:disabled {
+  background: #f7fafc;
+  color: #a0aec0;
+  cursor: not-allowed;
+}
+
+.custom-model-input::placeholder {
+  color: #a0aec0;
+}

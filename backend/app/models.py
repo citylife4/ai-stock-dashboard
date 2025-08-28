@@ -57,13 +57,19 @@ class AdminPromptRequest(BaseModel):
 
 
 class AdminConfigRequest(BaseModel):
-    data_source: Optional[str] = None  # "yahoo" or "alpha_vantage"
+    data_source: Optional[str] = None  # "yahoo", "alpha_vantage", or "polygon"
     alpha_vantage_api_key: Optional[str] = None
+    polygon_api_key: Optional[str] = None
+    ai_provider: Optional[str] = None  # "openai" or "groq"
+    ai_model: Optional[str] = None
 
 
 class AdminConfigResponse(BaseModel):
     data_source: str
     alpha_vantage_api_key: str
+    polygon_api_key: str
+    ai_provider: str
+    ai_model: str
 
 
 class AdminPromptResponse(BaseModel):
