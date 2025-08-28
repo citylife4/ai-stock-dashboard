@@ -1,4 +1,4 @@
-import yfinance as yf
+from alpha_vantage.timeseries import TimeSeries
 import random
 from datetime import datetime
 from typing import List, Optional
@@ -11,7 +11,13 @@ logger = logging.getLogger(__name__)
 
 class StockService:
     def __init__(self):
-        self.use_mock_data = True  # Start with mock data, switch to real if yfinance works
+        self.use_mock_data = True  # Start with mock data, switch to real if Alpha Vantage works
+        self.alpha_vantage = None
+        if config.ALPHA_VANTAGE_API_KEY:
+            try:
+                self.alpha_vantage = TimeSeries(key=config.ALPHA_VANTAGE_API_KEY, output_format='json')
+            except Exception as e:
+                logger.warning(f"Failed to initialize Alpha Vantage client: {e}")
         
     def fetch_stock_data(self, symbol: str) -> Optional[StockData]:
         """Fetch stock data for a given symbol."""
@@ -34,22 +40,29 @@ class StockService:
         return stocks
     
     def _fetch_real_data(self, symbol: str) -> Optional[StockData]:
-        """Fetch real stock data using yfinance."""
+        """Fetch real stock data using Alpha Vantage."""
         try:
-            stock = yf.Ticker(symbol)
-            info = stock.info
-            hist = stock.history(period="2d")
-            
-            if hist.empty or len(hist) < 2:
-                logger.warning(f"Insufficient data for {symbol}, using mock data")
+            if not self.alpha_vantage:
+                logger.warning(f"Alpha Vantage client not initialized for {symbol}, using mock data")
                 return self._generate_mock_data(symbol)
             
-            current_price = hist['Close'].iloc[-1]
-            previous_close = hist['Close'].iloc[-2]
-            change_percent = ((current_price - previous_close) / previous_close) * 100
-            volume = int(hist['Volume'].iloc[-1])
+            # Get quote data (current price info)
+            quote_data, quote_meta = self.alpha_vantage.get_quote_endpoint(symbol)
             
-            market_cap = info.get('marketCap')
+            if not quote_data:
+                logger.warning(f"No quote data for {symbol}, using mock data")
+                return self._generate_mock_data(symbol)
+            
+            # Get daily data for historical comparison
+            daily_data, daily_meta = self.alpha_vantage.get_daily(symbol, outputsize='compact')
+            
+            current_price = float(quote_data['05. price'])
+            previous_close = float(quote_data['08. previous close'])
+            change_percent = float(quote_data['10. change percent'].rstrip('%'))
+            volume = int(quote_data['06. volume'])
+            
+            # Try to get market cap from daily metadata or set to None
+            market_cap = None
             
             return StockData(
                 symbol=symbol,
@@ -120,14 +133,20 @@ class StockService:
     def test_real_data_connection(self) -> bool:
         """Test if we can fetch real data and switch mode accordingly."""
         try:
-            stock = yf.Ticker("AAPL")
-            hist = stock.history(period="1d")
-            if not hist.empty:
+            if not self.alpha_vantage:
+                logger.warning("Alpha Vantage client not initialized")
+                self.use_mock_data = True
+                logger.info("Using mock stock data")
+                return False
+                
+            # Test with AAPL
+            quote_data, _ = self.alpha_vantage.get_quote_endpoint("AAPL")
+            if quote_data and '05. price' in quote_data:
                 self.use_mock_data = False
-                logger.info("Successfully connected to real stock data")
+                logger.info("Successfully connected to Alpha Vantage stock data")
                 return True
         except Exception as e:
-            logger.warning(f"Could not connect to real stock data: {e}")
+            logger.warning(f"Could not connect to Alpha Vantage stock data: {e}")
         
         self.use_mock_data = True
         logger.info("Using mock stock data")

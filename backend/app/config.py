@@ -10,6 +10,9 @@ class Config:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
     
+    # Alpha Vantage Configuration
+    ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
+    
     # Server Configuration
     HOST = os.getenv("HOST", "localhost")
     PORT = int(os.getenv("PORT", 8000))
