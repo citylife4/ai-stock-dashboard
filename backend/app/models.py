@@ -124,6 +124,7 @@ class DashboardResponse(BaseModel):
     max_stocks: int
     subscription_tier: SubscriptionTier
     errors: List[ApiError] = []
+    is_sample_data: bool = False
 
 
 # Admin models

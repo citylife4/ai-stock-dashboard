@@ -1,7 +1,7 @@
 import { TrendingUp, TrendingDown, Award, DollarSign, BarChart3 } from 'lucide-react'
 import './StockCard.css'
 
-function StockCard({ stockAnalysis, rank }) {
+function StockCard({ stockAnalysis, rank, isDemo = false }) {
   const { stock_data, ai_analysis } = stockAnalysis
   const isPositive = stock_data.change_percent >= 0
 
@@ -34,7 +34,12 @@ function StockCard({ stockAnalysis, rank }) {
   }
 
   return (
-    <div className="stock-card">
+    <div className={`stock-card ${isDemo ? 'demo-card' : ''}`}>
+      {isDemo && (
+        <div className="demo-badge">
+          Demo Data
+        </div>
+      )}
       <div className="stock-card-header">
         <div className="stock-info">
           <div className="stock-symbol-container">

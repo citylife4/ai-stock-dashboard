@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { UserPlus, LogIn, Eye, EyeOff } from 'lucide-react'
+import { login } from '../services/api'
 import './UserAuth.css'
 
 function UserAuth({ onLogin, onClose }) {
@@ -21,35 +22,13 @@ function UserAuth({ onLogin, onClose }) {
 
     try {
       if (isLoginMode) {
-        // Login
-        const response = await fetch('/api/v1/auth/login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            email: formData.email,
-            password: formData.password
-          })
+        // Login using the proper API function
+        const loginResponse = await login({
+          email: formData.email,
+          password: formData.password
         })
-
-        if (!response.ok) {
-          const errorData = await response.json()
-          
-          // Handle validation errors (422) which come as an array
-          if (Array.isArray(errorData.detail)) {
-            const errorMessages = errorData.detail.map(err => err.msg).join(', ')
-            throw new Error(errorMessages)
-          }
-          
-          // Handle other errors
-          throw new Error(errorData.detail || 'Invalid email or password')
-        }
-
-        const data = await response.json()
-        localStorage.setItem('userToken', data.access_token)
-        localStorage.setItem('userData', JSON.stringify(data.user))
-        onLogin(data.user)
+        
+        onLogin(loginResponse.user)
         onClose()
       } else {
         // Register
@@ -76,24 +55,13 @@ function UserAuth({ onLogin, onClose }) {
 
         const data = await response.json()
         // Auto-login after registration
-        const loginResponse = await fetch('/api/v1/auth/login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            email: formData.email,
-            password: formData.password
-          })
+        const loginResponse = await login({
+          email: formData.email,
+          password: formData.password
         })
-
-        if (loginResponse.ok) {
-          const loginData = await loginResponse.json()
-          localStorage.setItem('userToken', loginData.access_token)
-          localStorage.setItem('userData', JSON.stringify(loginData.user))
-          onLogin(loginData.user)
-          onClose()
-        }
+        
+        onLogin(loginResponse.user)
+        onClose()
       }
     } catch (err) {
       setError(err.message)

@@ -6,6 +6,7 @@ import StockCard from './components/StockCard'
 import AdminDashboard from './components/AdminDashboard'
 import UserAuth from './components/UserAuth'
 import UserStockManager from './components/UserStockManager'
+import Welcome from './components/Welcome'
 
 import { fetchDashboard, refreshDashboard, getStatus, initializeAuth, getAuthToken, initializeUserAuth, getCurrentUser, logout } from './services/api'
 
@@ -25,14 +26,21 @@ function Dashboard() {
     // Check for existing user session
     initializeUserAuth()
     const userData = getCurrentUser()
+    console.log('Initial user data from localStorage:', userData)
     if (userData) {
       setUser(userData)
     }
   }, [])
 
-  const handleUserLogin = (loginResponse) => {
-    setUser(loginResponse.user)
+  const handleUserLogin = (userData) => {
+    console.log('User login data:', userData)
+    setUser(userData)
   }
+
+  // Debug effect to watch user state changes
+  useEffect(() => {
+    console.log('User state changed:', user)
+  }, [user])
 
   const handleUserLogout = () => {
     logout()
@@ -42,6 +50,7 @@ function Dashboard() {
 
   // Check if current user is admin
   const isUserAdmin = () => {
+    console.log('Checking admin status:', { user, is_admin: user?.is_admin, username: user?.username })
     return user && (user.is_admin === true || user.username === 'admin')
   }
 
@@ -123,6 +132,26 @@ function Dashboard() {
     )
   }
 
+  // Show welcome page for unauthenticated users
+  if (!user) {
+    return (
+      <div className="app">
+        <Welcome 
+          dashboardData={dashboardData} 
+          onShowAuth={() => setShowUserAuth(true)} 
+        />
+        
+        {showUserAuth && (
+          <UserAuth 
+            onLogin={handleUserLogin}
+            onClose={() => setShowUserAuth(false)}
+          />
+        )}
+      </div>
+    )
+  }
+
+  // Show authenticated dashboard
   return (
     <div className="app">
       <header className="app-header">
@@ -145,36 +174,27 @@ function Dashboard() {
               <Clock size={16} />
               <span>Updated: {dashboardData?.last_updated ? formatLastUpdated(dashboardData.last_updated) : 'Never'}</span>
             </div>
-            {user ? (
-              <div className="user-menu">
-                <div className="user-info">
-                  <User size={16} />
-                  <span>{user.username}</span>
-                  <span className="subscription-badge">{user.subscription_tier}</span>
-                  <span className="stock-count">{dashboardData?.total_stocks || 0}/{user.max_stocks}</span>
-                </div>
-                <button 
-                  onClick={() => setShowStockManager(true)}
-                  className="manage-stocks-btn"
-                  title="Manage your stocks"
-                >
-                  <List size={16} />
-                  Manage Stocks
-                </button>
-                <button onClick={handleUserLogout} className="logout-btn">
-                  <LogOut size={16} />
-                  Logout
-                </button>
-              </div>
-            ) : (
-              <button 
-                onClick={() => setShowUserAuth(true)}
-                className="login-btn"
-              >
+            <div className="user-menu">
+              <div className="user-info">
                 <User size={16} />
-                Login / Sign Up
+                <span>{user.username}</span>
+                <span className="subscription-badge">{user.subscription_tier}</span>
+                <span className="stock-count">{dashboardData?.total_stocks || 0}/{user.max_stocks}</span>
+              </div>
+              <button 
+                onClick={() => setShowStockManager(true)}
+                className="manage-stocks-btn"
+                title="Manage your stocks"
+              >
+                <List size={16} />
+                Manage Stocks
               </button>
-            )}
+              <button onClick={handleUserLogout} className="logout-btn">
+                <LogOut size={16} />
+                Logout
+              </button>
+            </div>
+            {console.log('Render time admin check:', { user, isAdmin: isUserAdmin() })}
             {isUserAdmin() ? (
               <button 
                 onClick={() => navigate('/admin')}
@@ -196,7 +216,25 @@ function Dashboard() {
           </div>
         )}
 
-        {dashboardData && (
+        {/* Show empty state if user has no stocks */}
+        {dashboardData && dashboardData.total_stocks === 0 && !error && (
+          <div className="empty-dashboard">
+            <div className="empty-state">
+              <TrendingUp size={64} className="empty-icon" />
+              <h2>Start Your Investment Journey</h2>
+              <p>You haven't added any stocks to track yet. Add some stocks to see AI-powered analysis and insights.</p>
+              <button 
+                onClick={() => setShowStockManager(true)}
+                className="add-stocks-btn"
+              >
+                <List size={16} />
+                Add Your First Stock
+              </button>
+            </div>
+          </div>
+        )}
+
+        {dashboardData && dashboardData.total_stocks > 0 && (
           <>
             {/* Show API errors if any */}
             {dashboardData.errors && dashboardData.errors.length > 0 && (
@@ -234,15 +272,13 @@ function Dashboard() {
                   <p>{dashboardData.stocks && dashboardData.stocks.length > 0 ? Math.round(dashboardData.stocks[dashboardData.stocks.length - 1].ai_analysis.average_score) : 'N/A'}</p>
                 </div>
               </div>
-              {user && (
-                <div className="stat-card subscription-card">
-                  <User size={20} />
-                  <div>
-                    <h3>Plan</h3>
-                    <p>{user.subscription_tier.toUpperCase()}</p>
-                  </div>
+              <div className="stat-card subscription-card">
+                <User size={20} />
+                <div>
+                  <h3>Plan</h3>
+                  <p>{user.subscription_tier.toUpperCase()}</p>
                 </div>
-              )}
+              </div>
             </div>
 
             <div className="stocks-grid">

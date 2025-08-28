@@ -24,11 +24,24 @@ function UserStockManager({ user, onClose }) {
   const loadUserStocks = async () => {
     try {
       setLoading(true)
+      setError(null) // Clear any previous errors
       const response = await getUserStocks()
       setUserStocks(response.symbols || [])
+      
+      // If user has no stocks, show a helpful message instead of an error
+      if (!response.symbols || response.symbols.length === 0) {
+        setSuccess('Ready to add your first stock! Search for a symbol below.')
+      }
     } catch (err) {
-      setError('Failed to load your stocks')
       console.error('Error loading user stocks:', err)
+      // More detailed error message
+      if (err.response?.status === 401) {
+        setError('Please log in to view your stocks')
+      } else if (err.response?.status === 403) {
+        setError('Access denied. Please check your permissions.')
+      } else {
+        setError(`Failed to load your stocks: ${err.response?.data?.detail || err.message || 'Unknown error'}`)
+      }
     } finally {
       setLoading(false)
     }
