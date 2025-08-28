@@ -1,72 +1,12 @@
 [
   {
-    "timestamp": "2025-08-28 04:20:55.308082",
-    "action": "update_ai_model",
-    "details": "Changed AI model to llama3-70b-8192",
-    "admin_user": "admin"
-  },
-  {
-    "timestamp": "2025-08-28 04:20:55.307236",
-    "action": "update_data_source",
-    "details": "Changed data source to polygon",
-    "admin_user": "admin"
-  },
-  {
-    "timestamp": "2025-08-28 04:19:57.818169",
+    "timestamp": "2025-08-28 04:21:57.310584",
     "action": "admin_login",
     "details": "Admin admin logged in",
     "admin_user": "admin"
   },
   {
-    "timestamp": "2025-08-28 03:39:37.769114",
-    "action": "update_api_key",
-    "details": "Updated Alpha Vantage API key",
-    "admin_user": "admin"
-  },
-  {
-    "timestamp": "2025-08-28 03:39:09.901104",
-    "action": "force_refresh",
-    "details": "Manually triggered stock data refresh",
-    "admin_user": "admin"
-  },
-  {
-    "timestamp": "2025-08-27 22:39:16.196532",
-    "action": "add_stock",
-    "details": "Added stock AMD to tracking list",
-    "admin_user": "admin"
-  },
-  {
-    "timestamp": "2025-08-27 22:30:58.314814",
-    "action": "admin_login",
-    "details": "Admin admin logged in",
-    "admin_user": "admin"
-  },
-  {
-    "timestamp": "2025-08-27 22:38:51.773114",
-    "action": "admin_login",
-    "details": "Admin admin logged in",
-    "admin_user": "admin"
-  },
-  {
-    "timestamp": "2025-08-28 03:38:33.377412",
-    "action": "admin_login",
-    "details": "Admin admin logged in",
-    "admin_user": "admin"
-  },
-  {
-    "timestamp": "2025-08-28 03:39:37.768500",
-    "action": "update_data_source",
-    "details": "Changed data source to alpha_vantage",
-    "admin_user": "admin"
-  },
-  {
-    "timestamp": "2025-08-28 04:19:06.366776",
-    "action": "admin_login",
-    "details": "Admin admin logged in",
-    "admin_user": "admin"
-  },
-  {
-    "timestamp": "2025-08-28 04:20:55.297738",
+    "timestamp": "2025-08-28 04:21:03.089230",
     "action": "admin_login",
     "details": "Admin admin logged in",
     "admin_user": "admin"
@@ -78,9 +18,87 @@
     "admin_user": "admin"
   },
   {
-    "timestamp": "2025-08-28 04:21:03.089230",
+    "timestamp": "2025-08-28 04:20:55.297738",
     "action": "admin_login",
     "details": "Admin admin logged in",
+    "admin_user": "admin"
+  },
+  {
+    "timestamp": "2025-08-28 04:19:06.366776",
+    "action": "admin_login",
+    "details": "Admin admin logged in",
+    "admin_user": "admin"
+  },
+  {
+    "timestamp": "2025-08-28 03:39:37.768500",
+    "action": "update_data_source",
+    "details": "Changed data source to alpha_vantage",
+    "admin_user": "admin"
+  },
+  {
+    "timestamp": "2025-08-28 03:38:33.377412",
+    "action": "admin_login",
+    "details": "Admin admin logged in",
+    "admin_user": "admin"
+  },
+  {
+    "timestamp": "2025-08-27 22:38:51.773114",
+    "action": "admin_login",
+    "details": "Admin admin logged in",
+    "admin_user": "admin"
+  },
+  {
+    "timestamp": "2025-08-27 22:30:58.314814",
+    "action": "admin_login",
+    "details": "Admin admin logged in",
+    "admin_user": "admin"
+  },
+  {
+    "timestamp": "2025-08-27 22:39:16.196532",
+    "action": "add_stock",
+    "details": "Added stock AMD to tracking list",
+    "admin_user": "admin"
+  },
+  {
+    "timestamp": "2025-08-28 03:39:09.901104",
+    "action": "force_refresh",
+    "details": "Manually triggered stock data refresh",
+    "admin_user": "admin"
+  },
+  {
+    "timestamp": "2025-08-28 03:39:37.769114",
+    "action": "update_api_key",
+    "details": "Updated Alpha Vantage API key",
+    "admin_user": "admin"
+  },
+  {
+    "timestamp": "2025-08-28 04:19:57.818169",
+    "action": "admin_login",
+    "details": "Admin admin logged in",
+    "admin_user": "admin"
+  },
+  {
+    "timestamp": "2025-08-28 04:20:55.307236",
+    "action": "update_data_source",
+    "details": "Changed data source to polygon",
+    "admin_user": "admin"
+  },
+  {
+    "timestamp": "2025-08-28 04:20:55.308082",
+    "action": "update_ai_model",
+    "details": "Changed AI model to llama3-70b-8192",
+    "admin_user": "admin"
+  },
+  {
+    "timestamp": "2025-08-28 04:21:49.363267",
+    "action": "admin_login",
+    "details": "Admin admin logged in",
+    "admin_user": "admin"
+  },
+  {
+    "timestamp": "2025-08-28 04:21:57.320308",
+    "action": "force_refresh",
+    "details": "Manually triggered stock data refresh",
     "admin_user": "admin"
   }
 ]

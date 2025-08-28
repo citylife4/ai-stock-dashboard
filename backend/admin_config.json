@@ -14,5 +14,5 @@
   "data_source": "polygon",
   "alpha_vantage_api_key": "demo_api_key_12345",
   "ai_provider": "groq",
-  "ai_model": "llama3-70b-8192"
+  "ai_model": "mixtral-8x7b-32768"
 }
