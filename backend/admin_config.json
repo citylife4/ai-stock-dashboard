@@ -13,6 +13,7 @@
   "ai_analysis_prompt": "Analyze the following stock data and provide:\n    1. A score from 0-100 (100 being the best investment opportunity)\n    2. A brief reason for the score (2-3 sentences)\n    \n    Consider factors like:\n    - Recent price performance\n    - Trading volume\n    - Market cap\n    - General market sentiment for the sector\n    \n    Stock Data:\n    Symbol: {symbol}\n    Current Price: ${current_price}\n    Previous Close: ${previous_close}\n    Daily Change: {change_percent}%\n    Volume: {volume}\n    Market Cap: ${market_cap}\n    \n    Respond in JSON format:\n    {{\"score\": <number>, \"reason\": \"<explanation>\"}}",
   "data_source": "polygon",
   "alpha_vantage_api_key": "demo_api_key_12345",
+  "polygon_api_key": "qIoD_aYvbsaSC5cyK7EOUgG2humTi3Jw",
   "ai_provider": "groq",
   "ai_model": "mixtral-8x7b-32768"
 }

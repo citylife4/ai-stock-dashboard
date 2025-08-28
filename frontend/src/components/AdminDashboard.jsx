@@ -31,11 +31,15 @@ function AdminDashboard({ onLogout }) {
   const [polygonApiKey, setPolygonApiKey] = useState('')
   const [aiProvider, setAiProvider] = useState('openai')
   const [aiModel, setAiModel] = useState('gpt-3.5-turbo')
+  const [customModel, setCustomModel] = useState('')
+  const [useCustomModel, setUseCustomModel] = useState(false)
   const [originalDataSource, setOriginalDataSource] = useState('yahoo')
   const [originalApiKey, setOriginalApiKey] = useState('')
   const [originalPolygonApiKey, setOriginalPolygonApiKey] = useState('')
   const [originalAiProvider, setOriginalAiProvider] = useState('openai')
   const [originalAiModel, setOriginalAiModel] = useState('gpt-3.5-turbo')
+  const [originalCustomModel, setOriginalCustomModel] = useState('')
+  const [originalUseCustomModel, setOriginalUseCustomModel] = useState(false)
 
   // Audit logs state
   const [auditLogs, setAuditLogs] = useState([])
@@ -63,11 +67,23 @@ function AdminDashboard({ onLogout }) {
         setPolygonApiKey(configData.polygon_api_key)
         setAiProvider(configData.ai_provider)
         setAiModel(configData.ai_model)
+        
+        // Check if current model is a custom model (not in predefined lists)
+        const predefinedModels = [
+          'gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo-preview',
+          'llama3-70b-8192', 'mixtral-8x7b-32768', 'gemma-7b-it'
+        ]
+        const isCustom = !predefinedModels.includes(configData.ai_model)
+        setUseCustomModel(isCustom)
+        setCustomModel(isCustom ? configData.ai_model : '')
+        
         setOriginalDataSource(configData.data_source)
         setOriginalApiKey(configData.alpha_vantage_api_key)
         setOriginalPolygonApiKey(configData.polygon_api_key)
         setOriginalAiProvider(configData.ai_provider)
         setOriginalAiModel(configData.ai_model)
+        setOriginalUseCustomModel(isCustom)
+        setOriginalCustomModel(isCustom ? configData.ai_model : '')
       } else if (activeTab === 'logs') {
         const logData = await getAuditLogs(50)
         setAuditLogs(logData.logs)
@@ -158,7 +174,11 @@ function AdminDashboard({ onLogout }) {
       }
 
       if (aiModel !== originalAiModel) {
-        configUpdate.ai_model = aiModel
+        configUpdate.ai_model = useCustomModel ? customModel : aiModel
+      }
+
+      if (useCustomModel !== originalUseCustomModel || customModel !== originalCustomModel) {
+        configUpdate.ai_model = useCustomModel ? customModel : aiModel
       }
 
       if (Object.keys(configUpdate).length === 0) {
@@ -173,7 +193,9 @@ function AdminDashboard({ onLogout }) {
       setOriginalApiKey(apiKey)
       setOriginalPolygonApiKey(polygonApiKey)
       setOriginalAiProvider(aiProvider)
-      setOriginalAiModel(aiModel)
+      setOriginalAiModel(useCustomModel ? customModel : aiModel)
+      setOriginalUseCustomModel(useCustomModel)
+      setOriginalCustomModel(customModel)
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to update configuration')
     } finally {
@@ -215,7 +237,9 @@ function AdminDashboard({ onLogout }) {
     apiKey !== originalApiKey || 
     polygonApiKey !== originalPolygonApiKey ||
     aiProvider !== originalAiProvider ||
-    aiModel !== originalAiModel
+    aiModel !== originalAiModel ||
+    useCustomModel !== originalUseCustomModel ||
+    customModel !== originalCustomModel
 
   return (
     <div className="admin-dashboard">
@@ -465,28 +489,67 @@ function AdminDashboard({ onLogout }) {
 
                 <div className="form-group">
                   <label htmlFor="ai-model">AI Model</label>
-                  <select
-                    id="ai-model"
-                    value={aiModel}
-                    onChange={(e) => setAiModel(e.target.value)}
-                    disabled={loading}
-                  >
-                    {aiProvider === 'openai' ? (
-                      <>
-                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                        <option value="gpt-4">GPT-4</option>
-                        <option value="gpt-4-turbo-preview">GPT-4 Turbo</option>
-                      </>
+                  <div className="model-selection">
+                    <div className="model-toggle">
+                      <label className="toggle-label">
+                        <input
+                          type="checkbox"
+                          checked={useCustomModel}
+                          onChange={(e) => {
+                            setUseCustomModel(e.target.checked)
+                            if (!e.target.checked) {
+                              // Reset to default model when switching back to dropdown
+                              if (aiProvider === 'openai') {
+                                setAiModel('gpt-3.5-turbo')
+                              } else {
+                                setAiModel('llama3-70b-8192')
+                              }
+                            }
+                          }}
+                          disabled={loading}
+                        />
+                        Use custom model
+                      </label>
+                    </div>
+                    
+                    {useCustomModel ? (
+                      <input
+                        type="text"
+                        id="custom-model"
+                        value={customModel}
+                        onChange={(e) => setCustomModel(e.target.value)}
+                        placeholder="Enter custom model name (e.g., gpt-4o, claude-3-sonnet, etc.)"
+                        disabled={loading}
+                        className="custom-model-input"
+                      />
                     ) : (
-                      <>
-                        <option value="llama3-70b-8192">Llama 3 70B</option>
-                        <option value="mixtral-8x7b-32768">Mixtral 8x7B</option>
-                        <option value="gemma-7b-it">Gemma 7B</option>
-                      </>
+                      <select
+                        id="ai-model"
+                        value={aiModel}
+                        onChange={(e) => setAiModel(e.target.value)}
+                        disabled={loading}
+                      >
+                        {aiProvider === 'openai' ? (
+                          <>
+                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                            <option value="gpt-4">GPT-4</option>
+                            <option value="gpt-4-turbo-preview">GPT-4 Turbo</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="llama3-70b-8192">Llama 3 70B</option>
+                            <option value="mixtral-8x7b-32768">Mixtral 8x7B</option>
+                            <option value="gemma-7b-it">Gemma 7B</option>
+                          </>
+                        )}
+                      </select>
                     )}
-                  </select>
+                  </div>
                   <p className="help-text">
-                    Select the specific model to use with the chosen AI provider.
+                    {useCustomModel 
+                      ? 'Enter the exact model name as required by your AI provider. Make sure the model is available for your API key.'
+                      : 'Select the specific model to use with the chosen AI provider.'
+                    }
                   </p>
                 </div>
 
@@ -507,6 +570,8 @@ function AdminDashboard({ onLogout }) {
                         setPolygonApiKey(originalPolygonApiKey)
                         setAiProvider(originalAiProvider)
                         setAiModel(originalAiModel)
+                        setUseCustomModel(originalUseCustomModel)
+                        setCustomModel(originalCustomModel)
                       }}
                       className="revert-btn"
                       disabled={loading}

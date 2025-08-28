@@ -95,7 +95,7 @@ class StockService:
                 stock_data = self.fetch_stock_data(symbol)
                 if stock_data:
                     stocks.append(stock_data)
-            except (YahooFinanceException, AlphaVantageException) as e:
+            except (YahooFinanceException, AlphaVantageException, PolygonException) as e:
                 # In production, don't skip the error but let it bubble up
                 if not config.DEBUG:
                     raise
@@ -220,9 +220,24 @@ class StockService:
                 else:
                     raise PolygonException(error_msg)
             
-            # Get previous close
+            # Get previous close with improved error handling
             prev_close_response = self.polygon_client.get_previous_close_agg(symbol)
-            if not prev_close_response or not prev_close_response.results:
+            
+            # Handle different response formats
+            prev_close_data = None
+            if prev_close_response:
+                # Check if response is a list (alternate API format)
+                if isinstance(prev_close_response, list):
+                    if len(prev_close_response) > 0:
+                        prev_close_data = prev_close_response[0]
+                # Check if response has results attribute (standard format)
+                elif hasattr(prev_close_response, 'results') and prev_close_response.results:
+                    prev_close_data = prev_close_response.results[0]
+                # Check if response is directly the data object
+                elif hasattr(prev_close_response, 'c'):
+                    prev_close_data = prev_close_response
+            
+            if not prev_close_data:
                 error_msg = f"No previous close data for {symbol} from Polygon.io"
                 logger.warning(error_msg)
                 if config.DEBUG:
@@ -230,10 +245,20 @@ class StockService:
                 else:
                     raise PolygonException(error_msg)
             
-            prev_close_data = prev_close_response.results[0]
-            previous_close = prev_close_data.c
+            # Extract previous close price and volume
+            previous_close = getattr(prev_close_data, 'c', None)
+            volume = getattr(prev_close_data, 'v', None)
+            
+            if previous_close is None:
+                error_msg = f"Invalid previous close data format for {symbol} from Polygon.io"
+                logger.warning(error_msg)
+                if config.DEBUG:
+                    return self._generate_mock_data(symbol)
+                else:
+                    raise PolygonException(error_msg)
             
             # Get current day aggregates (if available)
+            current_price = previous_close  # Default to previous close
             try:
                 from datetime import date
                 today = date.today().strftime('%Y-%m-%d')
@@ -241,34 +266,51 @@ class StockService:
                     symbol, 1, "day", today, today
                 )
                 
-                if current_agg_response and current_agg_response.results:
-                    current_data = current_agg_response.results[0]
+                # Handle different response formats for current aggregates
+                current_data = None
+                if current_agg_response:
+                    if isinstance(current_agg_response, list):
+                        if len(current_agg_response) > 0:
+                            current_data = current_agg_response[0]
+                    elif hasattr(current_agg_response, 'results') and current_agg_response.results:
+                        current_data = current_agg_response.results[0]
+                    elif hasattr(current_agg_response, 'c'):
+                        current_data = current_agg_response
+                
+                if current_data and hasattr(current_data, 'c'):
                     current_price = current_data.c
-                    volume = current_data.v
-                else:
-                    # Fall back to previous close as current price
-                    current_price = previous_close
-                    volume = prev_close_data.v
-            except:
-                # Fall back to previous close data
-                current_price = previous_close
-                volume = prev_close_data.v
+                    if hasattr(current_data, 'v'):
+                        volume = current_data.v
+                        
+            except Exception as e:
+                # Log the error but continue with previous close data
+                logger.debug(f"Could not get current day data for {symbol}: {e}")
             
             # Get ticker details for market cap
-            ticker_details = self.polygon_client.get_ticker_details(symbol)
             market_cap = None
-            if ticker_details and hasattr(ticker_details, 'market_cap'):
-                market_cap = ticker_details.market_cap
+            try:
+                ticker_details = self.polygon_client.get_ticker_details(symbol)
+                if ticker_details:
+                    # Handle different response formats for ticker details
+                    if hasattr(ticker_details, 'market_cap'):
+                        market_cap = ticker_details.market_cap
+                    elif hasattr(ticker_details, 'results') and ticker_details.results:
+                        results = ticker_details.results
+                        if hasattr(results, 'market_cap'):
+                            market_cap = results.market_cap
+            except Exception as e:
+                # Market cap is optional, log but don't fail
+                logger.debug(f"Could not get market cap for {symbol}: {e}")
             
             # Calculate change percentage
-            change_percent = ((current_price - previous_close) / previous_close) * 100
+            change_percent = ((current_price - previous_close) / previous_close) * 100 if previous_close > 0 else 0
             
             return StockData(
                 symbol=symbol,
-                current_price=current_price,
-                previous_close=previous_close,
-                change_percent=change_percent,
-                volume=volume,
+                current_price=round(current_price, 2),
+                previous_close=round(previous_close, 2),
+                change_percent=round(change_percent, 2),
+                volume=volume or 0,
                 market_cap=market_cap,
                 last_updated=datetime.now()
             )
@@ -278,6 +320,16 @@ class StockService:
         except Exception as e:
             error_msg = f"Error fetching Polygon.io data for {symbol}: {e}"
             logger.error(error_msg)
+            
+            # Check for rate limiting (429 error)
+            if "429" in str(e) or "too many" in str(e).lower():
+                error_msg = f"Polygon.io rate limit exceeded for {symbol}. Please wait before retrying."
+                logger.warning(error_msg)
+                if config.DEBUG:
+                    return self._generate_mock_data(symbol)
+                else:
+                    raise PolygonException(error_msg)
+            
             if config.DEBUG:
                 return self._generate_mock_data(symbol)
             else:
