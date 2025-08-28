@@ -2,12 +2,17 @@ from alpha_vantage.timeseries import TimeSeries
 import yfinance as yf
 from polygon import RESTClient
 import random
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from typing import List, Optional
 from ..models import StockData
 from ..config import config
 from ..exceptions import YahooFinanceException, AlphaVantageException, PolygonException
+from .rate_limiter import (
+    polygon_rate_limiter, alpha_vantage_rate_limiter, 
+    with_rate_limiting, retry_with_backoff
+)
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -156,6 +161,8 @@ class StockService:
             else:
                 raise YahooFinanceException(error_msg)
     
+    @with_rate_limiting(alpha_vantage_rate_limiter)
+    @retry_with_backoff(max_retries=2, base_delay=1.0)
     def _fetch_alpha_vantage_data(self, symbol: str) -> Optional[StockData]:
         """Fetch real stock data using Alpha Vantage."""
         try:
@@ -168,7 +175,14 @@ class StockService:
                     raise AlphaVantageException(error_msg)
             
             # Get quote data (current price info)
-            quote_data, quote_meta = self.alpha_vantage.get_quote_endpoint(symbol)
+            quote_response = self.alpha_vantage.get_quote_endpoint(symbol)
+            
+            # Handle the tuple response format
+            quote_data = None
+            if isinstance(quote_response, tuple) and len(quote_response) >= 1:
+                quote_data = quote_response[0]
+            elif isinstance(quote_response, dict):
+                quote_data = quote_response
             
             if not quote_data:
                 error_msg = f"No quote data for {symbol} from Alpha Vantage"
@@ -178,15 +192,21 @@ class StockService:
                 else:
                     raise AlphaVantageException(error_msg)
             
-            # Get daily data for historical comparison
-            daily_data, daily_meta = self.alpha_vantage.get_daily(symbol, outputsize='compact')
+            # Extract data with proper error handling
+            try:
+                current_price = float(quote_data['05. price'])
+                previous_close = float(quote_data['08. previous close'])
+                change_percent = float(quote_data['10. change percent'].rstrip('%'))
+                volume = int(quote_data['06. volume'])
+            except (KeyError, ValueError, TypeError) as e:
+                error_msg = f"Error parsing Alpha Vantage data for {symbol}: {e}"
+                logger.warning(error_msg)
+                if config.DEBUG:
+                    return self._generate_mock_data(symbol)
+                else:
+                    raise AlphaVantageException(error_msg)
             
-            current_price = float(quote_data['05. price'])
-            previous_close = float(quote_data['08. previous close'])
-            change_percent = float(quote_data['10. change percent'].rstrip('%'))
-            volume = int(quote_data['06. volume'])
-            
-            # Try to get market cap from daily metadata or set to None
+            # Market cap is not available from Alpha Vantage quote endpoint
             market_cap = None
             
             return StockData(
@@ -209,8 +229,10 @@ class StockService:
             else:
                 raise AlphaVantageException(error_msg)
     
+    @with_rate_limiting(polygon_rate_limiter)
+    @retry_with_backoff(max_retries=5, base_delay=2.0)
     def _fetch_polygon_data(self, symbol: str) -> Optional[StockData]:
-        """Fetch real stock data using Polygon.io."""
+        """Fetch real stock data using Polygon.io with improved error handling and rate limiting."""
         try:
             if not self.polygon_client:
                 error_msg = f"Polygon.io client not initialized for {symbol}"
@@ -220,36 +242,49 @@ class StockService:
                 else:
                     raise PolygonException(error_msg)
             
-            # Get previous close with improved error handling
-            prev_close_response = self.polygon_client.get_previous_close_agg(symbol)
+            # Get previous close data with better error handling
+            logger.debug(f"Fetching previous close data for {symbol}")
+            prev_close_response = None
             
-            # Handle different response formats
+            try:
+                prev_close_response = self.polygon_client.get_previous_close_agg(symbol)
+            except Exception as e:
+                error_str = str(e).lower()
+                if "429" in error_str or "too many" in error_str or "rate limit" in error_str:
+                    error_msg = f"Polygon.io rate limit exceeded for {symbol}. Please wait before retrying."
+                    logger.warning(error_msg)
+                    raise PolygonException(error_msg)
+                elif "404" in error_str or "not found" in error_str:
+                    error_msg = f"Symbol {symbol} not found on Polygon.io"
+                    logger.warning(error_msg)
+                    if config.DEBUG:
+                        return self._generate_mock_data(symbol)
+                    else:
+                        raise PolygonException(error_msg)
+                else:
+                    raise PolygonException(f"Error fetching previous close for {symbol}: {e}")
+            
+            # Parse previous close response with robust handling
             prev_close_data = None
             if prev_close_response:
-                # Check if response is a list (alternate API format)
-                if isinstance(prev_close_response, list):
-                    if len(prev_close_response) > 0:
+                try:
+                    # Handle different response formats from Polygon API
+                    if hasattr(prev_close_response, 'results') and prev_close_response.results:
+                        # Standard API response format
+                        if len(prev_close_response.results) > 0:
+                            prev_close_data = prev_close_response.results[0]
+                    elif isinstance(prev_close_response, list) and len(prev_close_response) > 0:
+                        # Alternative list format
                         prev_close_data = prev_close_response[0]
-                # Check if response has results attribute (standard format)
-                elif hasattr(prev_close_response, 'results') and prev_close_response.results:
-                    prev_close_data = prev_close_response.results[0]
-                # Check if response is directly the data object
-                elif hasattr(prev_close_response, 'c'):
-                    prev_close_data = prev_close_response
+                    elif hasattr(prev_close_response, 'c'):
+                        # Direct data format
+                        prev_close_data = prev_close_response
+                    else:
+                        logger.debug(f"Unexpected response format for {symbol}: {type(prev_close_response)}")
+                except Exception as e:
+                    logger.warning(f"Error parsing previous close response for {symbol}: {e}")
             
             if not prev_close_data:
-                error_msg = f"No previous close data for {symbol} from Polygon.io"
-                logger.warning(error_msg)
-                if config.DEBUG:
-                    return self._generate_mock_data(symbol)
-                else:
-                    raise PolygonException(error_msg)
-            
-            # Extract previous close price and volume
-            previous_close = getattr(prev_close_data, 'c', None)
-            volume = getattr(prev_close_data, 'v', None)
-            
-            if previous_close is None:
                 error_msg = f"Invalid previous close data format for {symbol} from Polygon.io"
                 logger.warning(error_msg)
                 if config.DEBUG:
@@ -257,78 +292,133 @@ class StockService:
                 else:
                     raise PolygonException(error_msg)
             
-            # Get current day aggregates (if available)
-            current_price = previous_close  # Default to previous close
+            # Extract data with safe attribute access
+            previous_close = None
+            volume = None
+            
             try:
-                from datetime import date
-                today = date.today().strftime('%Y-%m-%d')
-                current_agg_response = self.polygon_client.get_aggs(
-                    symbol, 1, "day", today, today
-                )
+                # Try different attribute names that Polygon might use
+                for attr in ['c', 'close', 'Close']:
+                    if hasattr(prev_close_data, attr):
+                        previous_close = getattr(prev_close_data, attr)
+                        break
                 
-                # Handle different response formats for current aggregates
-                current_data = None
-                if current_agg_response:
-                    if isinstance(current_agg_response, list):
-                        if len(current_agg_response) > 0:
-                            current_data = current_agg_response[0]
-                    elif hasattr(current_agg_response, 'results') and current_agg_response.results:
-                        current_data = current_agg_response.results[0]
-                    elif hasattr(current_agg_response, 'c'):
-                        current_data = current_agg_response
+                for attr in ['v', 'volume', 'Volume']:
+                    if hasattr(prev_close_data, attr):
+                        volume = getattr(prev_close_data, attr)
+                        break
                 
-                if current_data and hasattr(current_data, 'c'):
-                    current_price = current_data.c
-                    if hasattr(current_data, 'v'):
-                        volume = current_data.v
+                # If attributes don't work, try dictionary access
+                if previous_close is None and hasattr(prev_close_data, '__getitem__'):
+                    try:
+                        previous_close = prev_close_data['c'] or prev_close_data.get('close')
+                    except (KeyError, TypeError):
+                        pass
+                
+                if volume is None and hasattr(prev_close_data, '__getitem__'):
+                    try:
+                        volume = prev_close_data['v'] or prev_close_data.get('volume')
+                    except (KeyError, TypeError):
+                        pass
                         
             except Exception as e:
-                # Log the error but continue with previous close data
+                logger.warning(f"Error extracting data from response for {symbol}: {e}")
+            
+            if previous_close is None:
+                error_msg = f"Could not extract price data for {symbol} from Polygon.io response"
+                logger.warning(error_msg)
+                if config.DEBUG:
+                    return self._generate_mock_data(symbol)
+                else:
+                    raise PolygonException(error_msg)
+            
+            # Convert to proper types
+            try:
+                previous_close = float(previous_close)
+                volume = int(volume) if volume else 0
+            except (ValueError, TypeError) as e:
+                error_msg = f"Invalid data types for {symbol}: {e}"
+                logger.warning(error_msg)
+                if config.DEBUG:
+                    return self._generate_mock_data(symbol)
+                else:
+                    raise PolygonException(error_msg)
+            
+            # Use previous close as current price (conservative approach for free tier)
+            current_price = previous_close
+            
+            # Try to get current day data if available (with error handling)
+            try:
+                today = date.today().strftime('%Y-%m-%d')
+                yesterday = (date.today() - timedelta(days=1)).strftime('%Y-%m-%d')
+                
+                # Use a date range to increase chances of getting data
+                current_agg_response = self.polygon_client.get_aggs(
+                    symbol, 1, "day", yesterday, today
+                )
+                
+                if current_agg_response and hasattr(current_agg_response, 'results'):
+                    results = current_agg_response.results
+                    if results and len(results) > 0:
+                        # Get the most recent data point
+                        latest_data = results[-1]
+                        if hasattr(latest_data, 'c') and latest_data.c:
+                            current_price = float(latest_data.c)
+                        if hasattr(latest_data, 'v') and latest_data.v:
+                            volume = int(latest_data.v)
+                            
+            except Exception as e:
+                # Current day data is optional, just log and continue
                 logger.debug(f"Could not get current day data for {symbol}: {e}")
             
-            # Get ticker details for market cap
+            # Try to get market cap (optional)
             market_cap = None
             try:
                 ticker_details = self.polygon_client.get_ticker_details(symbol)
                 if ticker_details:
-                    # Handle different response formats for ticker details
-                    if hasattr(ticker_details, 'market_cap'):
-                        market_cap = ticker_details.market_cap
-                    elif hasattr(ticker_details, 'results') and ticker_details.results:
+                    if hasattr(ticker_details, 'results') and ticker_details.results:
                         results = ticker_details.results
                         if hasattr(results, 'market_cap'):
                             market_cap = results.market_cap
+                        elif hasattr(results, 'marketCap'):
+                            market_cap = results.marketCap
+                    elif hasattr(ticker_details, 'market_cap'):
+                        market_cap = ticker_details.market_cap
+                    elif hasattr(ticker_details, 'marketCap'):
+                        market_cap = ticker_details.marketCap
             except Exception as e:
-                # Market cap is optional, log but don't fail
+                # Market cap is optional, just log
                 logger.debug(f"Could not get market cap for {symbol}: {e}")
             
             # Calculate change percentage
-            change_percent = ((current_price - previous_close) / previous_close) * 100 if previous_close > 0 else 0
+            if current_price != previous_close and previous_close > 0:
+                change_percent = ((current_price - previous_close) / previous_close) * 100
+            else:
+                change_percent = 0.0
             
             return StockData(
                 symbol=symbol,
                 current_price=round(current_price, 2),
                 previous_close=round(previous_close, 2),
                 change_percent=round(change_percent, 2),
-                volume=volume or 0,
+                volume=volume,
                 market_cap=market_cap,
                 last_updated=datetime.now()
             )
+            
         except PolygonException:
             # Re-raise our custom exception
             raise
         except Exception as e:
-            error_msg = f"Error fetching Polygon.io data for {symbol}: {e}"
+            error_msg = f"Unexpected error fetching Polygon.io data for {symbol}: {e}"
             logger.error(error_msg)
             
-            # Check for rate limiting (429 error)
-            if "429" in str(e) or "too many" in str(e).lower():
+            # Check for rate limiting in the error message
+            error_str = str(e).lower()
+            if "429" in error_str or "too many" in error_str or "rate limit" in error_str:
                 error_msg = f"Polygon.io rate limit exceeded for {symbol}. Please wait before retrying."
                 logger.warning(error_msg)
-                if config.DEBUG:
-                    return self._generate_mock_data(symbol)
-                else:
-                    raise PolygonException(error_msg)
+                raise PolygonException(error_msg)
             
             if config.DEBUG:
                 return self._generate_mock_data(symbol)
