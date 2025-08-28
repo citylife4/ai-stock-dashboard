@@ -7,7 +7,7 @@ apscheduler==3.10.4
 python-dotenv==1.0.0
 alpha-vantage==3.0.0
 yfinance==0.2.18
-python-multipart==0.0.6
+python-multipart==0.0.18
 groq==0.31.0
 passlib==1.7.4
 python-jose==3.3.0
