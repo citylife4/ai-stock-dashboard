@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { 
   Settings, LogOut, Plus, Trash2, Save, RefreshCw, 
-  DollarSign, FileText, History, AlertCircle, Check, X 
+  DollarSign, FileText, History, AlertCircle, Check, X, Database 
 } from 'lucide-react'
 import { 
   getStockList, addStock, removeStock, 
   getPrompts, updatePrompts, getAuditLogs,
+  getConfig, updateConfig, forceRefresh,
   adminLogout 
 } from '../services/api'
 import './AdminDashboard.css'
@@ -23,6 +24,12 @@ function AdminDashboard({ onLogout }) {
   // Prompt management state
   const [aiPrompt, setAiPrompt] = useState('')
   const [originalPrompt, setOriginalPrompt] = useState('')
+
+  // Configuration state
+  const [dataSource, setDataSource] = useState('yahoo')
+  const [apiKey, setApiKey] = useState('')
+  const [originalDataSource, setOriginalDataSource] = useState('yahoo')
+  const [originalApiKey, setOriginalApiKey] = useState('')
 
   // Audit logs state
   const [auditLogs, setAuditLogs] = useState([])
@@ -43,6 +50,12 @@ function AdminDashboard({ onLogout }) {
         const promptData = await getPrompts()
         setAiPrompt(promptData.ai_analysis_prompt)
         setOriginalPrompt(promptData.ai_analysis_prompt)
+      } else if (activeTab === 'config') {
+        const configData = await getConfig()
+        setDataSource(configData.data_source)
+        setApiKey(configData.alpha_vantage_api_key)
+        setOriginalDataSource(configData.data_source)
+        setOriginalApiKey(configData.alpha_vantage_api_key)
       } else if (activeTab === 'logs') {
         const logData = await getAuditLogs(50)
         setAuditLogs(logData.logs)
@@ -108,6 +121,54 @@ function AdminDashboard({ onLogout }) {
     }
   }
 
+  const handleUpdateConfig = async () => {
+    setLoading(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const configUpdate = {}
+      
+      if (dataSource !== originalDataSource) {
+        configUpdate.data_source = dataSource
+      }
+      
+      if (apiKey !== originalApiKey) {
+        configUpdate.alpha_vantage_api_key = apiKey
+      }
+
+      if (Object.keys(configUpdate).length === 0) {
+        setError('No changes to save')
+        setLoading(false)
+        return
+      }
+
+      await updateConfig(configUpdate)
+      setSuccess('Successfully updated configuration')
+      setOriginalDataSource(dataSource)
+      setOriginalApiKey(apiKey)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to update configuration')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleForceRefresh = async () => {
+    setLoading(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      await forceRefresh()
+      setSuccess('Stock data refresh initiated successfully')
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to refresh data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleLogout = () => {
     adminLogout()
     onLogout()
@@ -122,7 +183,8 @@ function AdminDashboard({ onLogout }) {
     return new Date(timestamp).toLocaleString()
   }
 
-  const hasUnsavedChanges = aiPrompt !== originalPrompt
+  const hasUnsavedPromptChanges = aiPrompt !== originalPrompt
+  const hasUnsavedConfigChanges = dataSource !== originalDataSource || apiKey !== originalApiKey
 
   return (
     <div className="admin-dashboard">
@@ -154,6 +216,13 @@ function AdminDashboard({ onLogout }) {
           >
             <FileText size={16} />
             Prompt Management
+          </button>
+          <button 
+            onClick={() => setActiveTab('config')}
+            className={`nav-btn ${activeTab === 'config' ? 'active' : ''}`}
+          >
+            <Database size={16} />
+            Data Configuration
           </button>
           <button 
             onClick={() => setActiveTab('logs')}
@@ -260,13 +329,13 @@ function AdminDashboard({ onLogout }) {
                 <div className="prompt-actions">
                   <button
                     onClick={handleUpdatePrompt}
-                    disabled={loading || !hasUnsavedChanges}
+                    disabled={loading || !hasUnsavedPromptChanges}
                     className="save-btn"
                   >
                     <Save size={16} />
                     {loading ? 'Saving...' : 'Save Changes'}
                   </button>
-                  {hasUnsavedChanges && (
+                  {hasUnsavedPromptChanges && (
                     <button
                       onClick={() => setAiPrompt(originalPrompt)}
                       className="revert-btn"
@@ -276,6 +345,90 @@ function AdminDashboard({ onLogout }) {
                     </button>
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'config' && (
+            <div className="tab-content">
+              <div className="section-header">
+                <h2>Data Configuration</h2>
+                <p>Configure data source and API settings. Changes take effect immediately.</p>
+              </div>
+
+              <div className="config-section">
+                <div className="form-group">
+                  <label htmlFor="data-source">Data Source</label>
+                  <select
+                    id="data-source"
+                    value={dataSource}
+                    onChange={(e) => setDataSource(e.target.value)}
+                    disabled={loading}
+                  >
+                    <option value="yahoo">Yahoo Finance</option>
+                    <option value="alpha_vantage">Alpha Vantage</option>
+                  </select>
+                  <p className="help-text">
+                    Yahoo Finance provides free stock data but may have rate limits. 
+                    Alpha Vantage requires an API key but offers more reliable data.
+                  </p>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="api-key">Alpha Vantage API Key</label>
+                  <input
+                    type="text"
+                    id="api-key"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="Enter your Alpha Vantage API key"
+                    disabled={loading}
+                  />
+                  <p className="help-text">
+                    Required only when using Alpha Vantage. Get your free API key from{' '}
+                    <a href="https://www.alphavantage.co/support/#api-key" target="_blank" rel="noopener noreferrer">
+                      Alpha Vantage
+                    </a>
+                  </p>
+                </div>
+
+                <div className="config-actions">
+                  <button
+                    onClick={handleUpdateConfig}
+                    disabled={loading || !hasUnsavedConfigChanges}
+                    className="save-btn"
+                  >
+                    <Save size={16} />
+                    {loading ? 'Saving...' : 'Save Configuration'}
+                  </button>
+                  {hasUnsavedConfigChanges && (
+                    <button
+                      onClick={() => {
+                        setDataSource(originalDataSource)
+                        setApiKey(originalApiKey)
+                      }}
+                      className="revert-btn"
+                      disabled={loading}
+                    >
+                      Revert Changes
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="refresh-section">
+                <div className="section-header">
+                  <h3>Manual Refresh</h3>
+                  <p>Force an immediate update of stock data using the current configuration.</p>
+                </div>
+                <button
+                  onClick={handleForceRefresh}
+                  disabled={loading}
+                  className="refresh-btn"
+                >
+                  <RefreshCw className={loading ? 'spinning' : ''} size={16} />
+                  {loading ? 'Refreshing...' : 'Refresh Stock Data'}
+                </button>
               </div>
             </div>
           )}

@@ -1,4 +1,5 @@
 from alpha_vantage.timeseries import TimeSeries
+import yfinance as yf
 import random
 from datetime import datetime
 from typing import List, Optional
@@ -11,13 +12,31 @@ logger = logging.getLogger(__name__)
 
 class StockService:
     def __init__(self):
-        self.use_mock_data = True  # Start with mock data, switch to real if Alpha Vantage works
+        self.use_mock_data = True  # Start with mock data, will switch based on configuration and connectivity
         self.alpha_vantage = None
-        if config.ALPHA_VANTAGE_API_KEY:
-            try:
-                self.alpha_vantage = TimeSeries(key=config.ALPHA_VANTAGE_API_KEY, output_format='json')
-            except Exception as e:
-                logger.warning(f"Failed to initialize Alpha Vantage client: {e}")
+        self._initialize_data_sources()
+        
+    def _initialize_data_sources(self):
+        """Initialize data sources based on configuration."""
+        data_source = config.get_data_source()
+        
+        if data_source == "alpha_vantage":
+            api_key = config.get_alpha_vantage_api_key()
+            if api_key:
+                try:
+                    self.alpha_vantage = TimeSeries(key=api_key, output_format='json')
+                    logger.info("Alpha Vantage client initialized")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize Alpha Vantage client: {e}")
+            else:
+                logger.warning("Alpha Vantage selected but no API key provided")
+        
+        # Test connection and set data mode
+        self.test_real_data_connection()
+        
+    def refresh_data_sources(self):
+        """Refresh data source configuration - call when config changes."""
+        self._initialize_data_sources()
         
     def fetch_stock_data(self, symbol: str) -> Optional[StockData]:
         """Fetch stock data for a given symbol."""
@@ -40,6 +59,46 @@ class StockService:
         return stocks
     
     def _fetch_real_data(self, symbol: str) -> Optional[StockData]:
+        """Fetch real stock data using configured data source."""
+        data_source = config.get_data_source()
+        
+        if data_source == "alpha_vantage":
+            return self._fetch_alpha_vantage_data(symbol)
+        else:  # Default to Yahoo Finance
+            return self._fetch_yahoo_data(symbol)
+    
+    def _fetch_yahoo_data(self, symbol: str) -> Optional[StockData]:
+        """Fetch real stock data using Yahoo Finance."""
+        try:
+            stock = yf.Ticker(symbol)
+            info = stock.info
+            hist = stock.history(period="2d")
+            
+            if hist.empty or len(hist) < 2:
+                logger.warning(f"Insufficient data for {symbol}, using mock data")
+                return self._generate_mock_data(symbol)
+            
+            current_price = hist['Close'].iloc[-1]
+            previous_close = hist['Close'].iloc[-2]
+            change_percent = ((current_price - previous_close) / previous_close) * 100
+            volume = int(hist['Volume'].iloc[-1])
+            
+            market_cap = info.get('marketCap')
+            
+            return StockData(
+                symbol=symbol,
+                current_price=round(current_price, 2),
+                previous_close=round(previous_close, 2),
+                change_percent=round(change_percent, 2),
+                volume=volume,
+                market_cap=market_cap,
+                last_updated=datetime.now()
+            )
+        except Exception as e:
+            logger.error(f"Error fetching Yahoo Finance data for {symbol}: {e}")
+            return self._generate_mock_data(symbol)
+    
+    def _fetch_alpha_vantage_data(self, symbol: str) -> Optional[StockData]:
         """Fetch real stock data using Alpha Vantage."""
         try:
             if not self.alpha_vantage:
@@ -74,7 +133,7 @@ class StockService:
                 last_updated=datetime.now()
             )
         except Exception as e:
-            logger.error(f"Error fetching real data for {symbol}: {e}")
+            logger.error(f"Error fetching Alpha Vantage data for {symbol}: {e}")
             return self._generate_mock_data(symbol)
     
     def _generate_mock_data(self, symbol: str) -> StockData:
@@ -132,21 +191,31 @@ class StockService:
     
     def test_real_data_connection(self) -> bool:
         """Test if we can fetch real data and switch mode accordingly."""
+        data_source = config.get_data_source()
+        
         try:
-            if not self.alpha_vantage:
-                logger.warning("Alpha Vantage client not initialized")
-                self.use_mock_data = True
-                logger.info("Using mock stock data")
-                return False
-                
-            # Test with AAPL
-            quote_data, _ = self.alpha_vantage.get_quote_endpoint("AAPL")
-            if quote_data and '05. price' in quote_data:
-                self.use_mock_data = False
-                logger.info("Successfully connected to Alpha Vantage stock data")
-                return True
+            if data_source == "alpha_vantage":
+                if not self.alpha_vantage:
+                    logger.warning("Alpha Vantage selected but client not initialized")
+                    self.use_mock_data = True
+                    logger.info("Using mock stock data")
+                    return False
+                    
+                # Test with AAPL
+                quote_data, _ = self.alpha_vantage.get_quote_endpoint("AAPL")
+                if quote_data and '05. price' in quote_data:
+                    self.use_mock_data = False
+                    logger.info("Successfully connected to Alpha Vantage stock data")
+                    return True
+            else:  # Yahoo Finance
+                stock = yf.Ticker("AAPL")
+                hist = stock.history(period="1d")
+                if not hist.empty:
+                    self.use_mock_data = False
+                    logger.info("Successfully connected to Yahoo Finance stock data")
+                    return True
         except Exception as e:
-            logger.warning(f"Could not connect to Alpha Vantage stock data: {e}")
+            logger.warning(f"Could not connect to {data_source} stock data: {e}")
         
         self.use_mock_data = True
         logger.info("Using mock stock data")

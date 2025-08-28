@@ -10,7 +10,6 @@ import { fetchDashboard, refreshDashboard, adminLogin, initializeAuth, getAuthTo
 function Dashboard() {
   const [dashboardData, setDashboardData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
   const navigate = useNavigate()
   const isAuthenticated = !!getAuthToken()
@@ -25,23 +24,6 @@ function Dashboard() {
       console.error('Error loading dashboard:', err)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleRefresh = async () => {
-    try {
-      setRefreshing(true)
-      setError(null)
-      await refreshDashboard()
-      // Wait a moment for the backend to process
-      setTimeout(() => {
-        loadDashboard()
-        setRefreshing(false)
-      }, 2000)
-    } catch (err) {
-      setError('Failed to refresh dashboard')
-      setRefreshing(false)
-      console.error('Error refreshing dashboard:', err)
     }
   }
 
@@ -80,14 +62,6 @@ function Dashboard() {
               <Clock size={16} />
               <span>Updated: {dashboardData?.last_updated ? formatLastUpdated(dashboardData.last_updated) : 'Never'}</span>
             </div>
-            <button 
-              onClick={handleRefresh} 
-              disabled={refreshing}
-              className={`refresh-btn ${refreshing ? 'refreshing' : ''}`}
-            >
-              <RefreshCw className={refreshing ? 'spinning' : ''} size={16} />
-              {refreshing ? 'Refreshing...' : 'Refresh'}
-            </button>
             {isAuthenticated ? (
               <button 
                 onClick={() => navigate('/admin')}

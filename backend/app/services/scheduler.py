@@ -95,3 +95,8 @@ class SchedulerService:
         """Force an immediate update of stock analysis."""
         logger.info("Forcing immediate stock analysis update...")
         self.update_stock_analysis()
+    
+    def refresh_stock_service(self):
+        """Refresh the stock service configuration - call when data source changes."""
+        logger.info("Refreshing stock service configuration...")
+        self.stock_service.refresh_data_sources()

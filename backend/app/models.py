@@ -49,6 +49,16 @@ class AdminPromptRequest(BaseModel):
     ai_analysis_prompt: Optional[str] = None
 
 
+class AdminConfigRequest(BaseModel):
+    data_source: Optional[str] = None  # "yahoo" or "alpha_vantage"
+    alpha_vantage_api_key: Optional[str] = None
+
+
+class AdminConfigResponse(BaseModel):
+    data_source: str
+    alpha_vantage_api_key: str
+
+
 class AdminPromptResponse(BaseModel):
     ai_analysis_prompt: str
 
