@@ -8,6 +8,20 @@ const api = axios.create({
   timeout: 100000,
 })
 
+// Auth token management
+let authToken = null
+
+export const setAuthToken = (token) => {
+  authToken = token
+  if (token) {
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`
+  } else {
+    delete api.defaults.headers.common['Authorization']
+  }
+}
+
+export const getAuthToken = () => authToken
+
 export const fetchDashboard = async () => {
   try {
     const response = await api.get('/dashboard')
@@ -44,6 +58,93 @@ export const getStockAnalysis = async (symbol) => {
     return response.data
   } catch (error) {
     console.error(`Error fetching stock ${symbol}:`, error)
+    throw error
+  }
+}
+
+// Admin API functions
+export const adminLogin = async (username, password) => {
+  try {
+    const response = await api.post('/admin/login', { username, password })
+    const { access_token } = response.data
+    setAuthToken(access_token)
+    localStorage.setItem('adminToken', access_token)
+    return response.data
+  } catch (error) {
+    console.error('Error logging in:', error)
+    throw error
+  }
+}
+
+export const adminLogout = () => {
+  setAuthToken(null)
+  localStorage.removeItem('adminToken')
+}
+
+export const initializeAuth = () => {
+  const token = localStorage.getItem('adminToken')
+  if (token) {
+    setAuthToken(token)
+  }
+  return token
+}
+
+export const getStockList = async () => {
+  try {
+    const response = await api.get('/admin/stocks')
+    return response.data
+  } catch (error) {
+    console.error('Error fetching stock list:', error)
+    throw error
+  }
+}
+
+export const addStock = async (symbol) => {
+  try {
+    const response = await api.post('/admin/stocks', { symbol })
+    return response.data
+  } catch (error) {
+    console.error('Error adding stock:', error)
+    throw error
+  }
+}
+
+export const removeStock = async (symbol) => {
+  try {
+    const response = await api.delete(`/admin/stocks/${symbol}`)
+    return response.data
+  } catch (error) {
+    console.error('Error removing stock:', error)
+    throw error
+  }
+}
+
+export const getPrompts = async () => {
+  try {
+    const response = await api.get('/admin/prompts')
+    return response.data
+  } catch (error) {
+    console.error('Error fetching prompts:', error)
+    throw error
+  }
+}
+
+export const updatePrompts = async (aiAnalysisPrompt) => {
+  try {
+    const response = await api.put('/admin/prompts', { ai_analysis_prompt: aiAnalysisPrompt })
+    return response.data
+  } catch (error) {
+    console.error('Error updating prompts:', error)
+    throw error
+  }
+}
+
+export const getAuditLogs = async (limit = 100) => {
+  try {
+    const response = await api.get(`/admin/logs?limit=${limit}`)
+    return response.data
+  } catch (error) {
+    console.error('Error fetching audit logs:', error)
     throw error
   }
 }

@@ -90,6 +90,28 @@
   cursor: not-allowed;
 }
 
+.admin-btn, .admin-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #805ad5;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.admin-btn:hover, .admin-link:hover {
+  background: #6b46c1;
+  transform: translateY(-1px);
+}
+}
+
 .refresh-btn.refreshing {
   background: #4299e1;
 }

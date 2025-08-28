@@ -1,14 +1,19 @@
 import { useState, useEffect } from 'react'
-import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Clock } from 'lucide-react'
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom'
+import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Clock, Settings } from 'lucide-react'
 import './App.css'
 import StockCard from './components/StockCard'
-import { fetchDashboard, refreshDashboard } from './services/api'
+import AdminLogin from './components/AdminLogin'
+import AdminDashboard from './components/AdminDashboard'
+import { fetchDashboard, refreshDashboard, adminLogin, initializeAuth, getAuthToken } from './services/api'
 
-function App() {
+function Dashboard() {
   const [dashboardData, setDashboardData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
+  const navigate = useNavigate()
+  const isAuthenticated = !!getAuthToken()
 
   const loadDashboard = async () => {
     try {
@@ -83,6 +88,20 @@ function App() {
               <RefreshCw className={refreshing ? 'spinning' : ''} size={16} />
               {refreshing ? 'Refreshing...' : 'Refresh'}
             </button>
+            {isAuthenticated ? (
+              <button 
+                onClick={() => navigate('/admin')}
+                className="admin-btn"
+              >
+                <Settings size={16} />
+                Admin
+              </button>
+            ) : (
+              <Link to="/admin/login" className="admin-link">
+                <Settings size={16} />
+                Admin
+              </Link>
+            )}
           </div>
         </div>
       </header>
@@ -109,20 +128,20 @@ function App() {
                 <TrendingUp size={20} />
                 <div>
                   <h3>Top Score</h3>
-                  <p>{dashboardData.stocks[0]?.ai_analysis.score || 'N/A'}</p>
+                  <p>{dashboardData.stocks && dashboardData.stocks.length > 0 ? dashboardData.stocks[0].ai_analysis.score : 'N/A'}</p>
                 </div>
               </div>
               <div className="stat-card">
                 <TrendingDown size={20} />
                 <div>
                   <h3>Lowest Score</h3>
-                  <p>{dashboardData.stocks[dashboardData.stocks.length - 1]?.ai_analysis.score || 'N/A'}</p>
+                  <p>{dashboardData.stocks && dashboardData.stocks.length > 0 ? dashboardData.stocks[dashboardData.stocks.length - 1].ai_analysis.score : 'N/A'}</p>
                 </div>
               </div>
             </div>
 
             <div className="stocks-grid">
-              {dashboardData.stocks.map((stockAnalysis, index) => (
+              {dashboardData.stocks && dashboardData.stocks.map((stockAnalysis, index) => (
                 <StockCard 
                   key={stockAnalysis.stock_data.symbol} 
                   stockAnalysis={stockAnalysis}
@@ -134,6 +153,55 @@ function App() {
         )}
       </main>
     </div>
+  )
+}
+
+function AdminLoginPage() {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const navigate = useNavigate()
+
+  const handleLogin = async (username, password) => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      await adminLogin(username, password)
+      navigate('/admin')
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Login failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return <AdminLogin onLogin={handleLogin} error={error} loading={loading} />
+}
+
+function AdminPage() {
+  const navigate = useNavigate()
+
+  const handleLogout = () => {
+    navigate('/')
+  }
+
+  return <AdminDashboard onLogout={handleLogout} />
+}
+
+function App() {
+  useEffect(() => {
+    // Initialize authentication on app start
+    initializeAuth()
+  }, [])
+
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/admin/login" element={<AdminLoginPage />} />
+        <Route path="/admin" element={<AdminPage />} />
+      </Routes>
+    </Router>
   )
 }
 
