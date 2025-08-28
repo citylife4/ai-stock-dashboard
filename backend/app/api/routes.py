@@ -63,11 +63,23 @@ async def get_dashboard():
 
 @router.post("/refresh")
 async def refresh_dashboard():
-    """Force a refresh of the stock analysis."""
+    """Force a refresh of the stock analysis - non-blocking."""
     try:
         service = get_scheduler_service()
+        
+        if service.is_update_in_progress():
+            return {
+                "message": "Update already in progress", 
+                "timestamp": datetime.now(),
+                "status": "in_progress"
+            }
+        
         service.force_update()
-        return {"message": "Dashboard refresh initiated", "timestamp": datetime.now()}
+        return {
+            "message": "Dashboard refresh initiated", 
+            "timestamp": datetime.now(),
+            "status": "started"
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error refreshing dashboard: {str(e)}")
 
@@ -84,6 +96,7 @@ async def get_status():
             "status": "running",
             "last_updated": last_updated,
             "total_stocks_analyzed": total_stocks,
+            "update_in_progress": service.is_update_in_progress(),
             "using_mock_data": {
                 "stocks": service.stock_service.use_mock_data,
                 "ai_analysis": service.ai_service.use_mock_analysis
