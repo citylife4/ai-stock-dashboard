@@ -41,6 +41,7 @@ class User(BaseModel):
     created_at: datetime
     updated_at: datetime
     is_active: bool = True
+    is_admin: bool = False
 
 
 class UserResponse(BaseModel):
@@ -51,6 +52,7 @@ class UserResponse(BaseModel):
     max_stocks: int
     created_at: datetime
     is_active: bool
+    is_admin: bool = False
 
 
 class LoginResponse(BaseModel):

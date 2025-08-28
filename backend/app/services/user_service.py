@@ -41,7 +41,8 @@ class UserService:
                 "max_stocks": limits["max_stocks"],
                 "created_at": datetime.utcnow(),
                 "updated_at": datetime.utcnow(),
-                "is_active": True
+                "is_active": True,
+                "is_admin": False
             }
             
             result = await self.db.users.insert_one(user_doc)
@@ -183,6 +184,75 @@ class UserService:
             SubscriptionTier.EXPERT: {"max_stocks": 20}
         }
         return limits.get(tier, limits[SubscriptionTier.FREE])
+    
+    async def create_admin_user(self, username: str, email: str, password: str) -> Optional[User]:
+        """Create admin user with unlimited access."""
+        if self.db is None:
+            return None
+            
+        try:
+            # Check if admin user already exists
+            existing_admin = await self.db.users.find_one({
+                "$or": [
+                    {"email": email},
+                    {"username": username},
+                    {"is_admin": True}
+                ]
+            })
+            
+            if existing_admin:
+                logger.info("Admin user already exists")
+                return None
+            
+            # Hash password
+            hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+            
+            admin_doc = {
+                "username": username,
+                "email": email,
+                "password_hash": hashed_password,
+                "subscription_tier": SubscriptionTier.EXPERT.value,  # Admin gets expert tier
+                "max_stocks": 9999,  # Unlimited stocks for admin
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow(),
+                "is_active": True,
+                "is_admin": True
+            }
+            
+            result = await self.db.users.insert_one(admin_doc)
+            
+            if result.inserted_id:
+                admin_doc["id"] = str(result.inserted_id)
+                return User(**admin_doc)
+                
+        except Exception as e:
+            logger.error(f"Error creating admin user: {e}")
+            return None
+    
+    async def ensure_admin_user_exists(self, username: str, email: str, password: str) -> bool:
+        """Ensure admin user exists in the database."""
+        if self.db is None:
+            return False
+            
+        try:
+            # Check if any admin user exists
+            admin_exists = await self.db.users.find_one({"is_admin": True})
+            
+            if not admin_exists:
+                admin_user = await self.create_admin_user(username, email, password)
+                if admin_user:
+                    logger.info(f"Created admin user: {username}")
+                    return True
+                else:
+                    logger.error("Failed to create admin user")
+                    return False
+            else:
+                logger.info("Admin user already exists")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error ensuring admin user exists: {e}")
+            return False
 
 
 class UserStockService:

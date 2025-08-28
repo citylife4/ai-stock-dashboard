@@ -146,7 +146,7 @@
   font-weight: 500;
 }
 
-.login-btn, .logout-btn {
+.login-btn, .logout-btn, .manage-stocks-btn {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -161,7 +161,7 @@
   transition: all 0.2s ease;
 }
 
-.login-btn:hover, .logout-btn:hover {
+.login-btn:hover, .logout-btn:hover, .manage-stocks-btn:hover {
   background: #2563eb;
   transform: translateY(-1px);
 }
@@ -172,6 +172,14 @@
 
 .logout-btn:hover {
   background: #dc2626;
+}
+
+.manage-stocks-btn {
+  background: #10b981;
+}
+
+.manage-stocks-btn:hover {
+  background: #059669;
 }
 
 .subscription-card {

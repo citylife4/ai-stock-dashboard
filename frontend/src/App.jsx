@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom'
-import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Clock, Settings, User, LogOut } from 'lucide-react'
+import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Clock, Settings, User, LogOut, List } from 'lucide-react'
 import './App.css'
 import StockCard from './components/StockCard'
 import AdminLogin from './components/AdminLogin'
 import AdminDashboard from './components/AdminDashboard'
 import UserAuth from './components/UserAuth'
+import UserStockManager from './components/UserStockManager'
 
-import { fetchDashboard, refreshDashboard, getStatus, adminLogin, initializeAuth, getAuthToken } from './services/api'
+import { fetchDashboard, refreshDashboard, getStatus, adminLogin, initializeAuth, getAuthToken, initializeUserAuth, getCurrentUser, logout } from './services/api'
 
 function Dashboard() {
   const [dashboardData, setDashboardData] = useState(null)
@@ -17,26 +18,32 @@ function Dashboard() {
   const [updateStatus, setUpdateStatus] = useState(null)
   const [user, setUser] = useState(null)
   const [showUserAuth, setShowUserAuth] = useState(false)
+  const [showStockManager, setShowStockManager] = useState(false)
   const navigate = useNavigate()
   const isAuthenticated = !!getAuthToken()
 
   useEffect(() => {
     // Check for existing user session
-    const userData = localStorage.getItem('userData')
+    initializeUserAuth()
+    const userData = getCurrentUser()
     if (userData) {
-      setUser(JSON.parse(userData))
+      setUser(userData)
     }
   }, [])
 
-  const handleUserLogin = (userData) => {
-    setUser(userData)
+  const handleUserLogin = (loginResponse) => {
+    setUser(loginResponse.user)
   }
 
   const handleUserLogout = () => {
-    localStorage.removeItem('userToken')
-    localStorage.removeItem('userData')
+    logout()
     setUser(null)
     loadDashboard() // Reload dashboard without user context
+  }
+
+  // Check if current user is admin
+  const isUserAdmin = () => {
+    return user && (user.is_admin === true || user.username === 'admin')
   }
 
   const loadDashboard = async () => {
@@ -147,6 +154,14 @@ function Dashboard() {
                   <span className="subscription-badge">{user.subscription_tier}</span>
                   <span className="stock-count">{dashboardData?.total_stocks || 0}/{user.max_stocks}</span>
                 </div>
+                <button 
+                  onClick={() => setShowStockManager(true)}
+                  className="manage-stocks-btn"
+                  title="Manage your stocks"
+                >
+                  <List size={16} />
+                  Manage Stocks
+                </button>
                 <button onClick={handleUserLogout} className="logout-btn">
                   <LogOut size={16} />
                   Logout
@@ -161,7 +176,7 @@ function Dashboard() {
                 Login / Sign Up
               </button>
             )}
-            {isAuthenticated ? (
+            {(isAuthenticated || isUserAdmin()) ? (
               <button 
                 onClick={() => navigate('/admin')}
                 className="admin-btn"
@@ -253,6 +268,13 @@ function Dashboard() {
         <UserAuth 
           onLogin={handleUserLogin}
           onClose={() => setShowUserAuth(false)}
+        />
+      )}
+      
+      {showStockManager && user && (
+        <UserStockManager 
+          user={user}
+          onClose={() => setShowStockManager(false)}
         />
       )}
     </div>

@@ -117,7 +117,8 @@ class AuthService:
             subscription_tier=user.subscription_tier,
             max_stocks=user.max_stocks,
             created_at=user.created_at,
-            is_active=user.is_active
+            is_active=user.is_active,
+            is_admin=getattr(user, 'is_admin', False)
         )
         
         return LoginResponse(

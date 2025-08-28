@@ -200,7 +200,7 @@ export const updateUser = async (userId, updateData) => {
   }
 }
 
-export const getUserStocks = async (userId) => {
+export const getAdminUserStocks = async (userId) => {
   try {
     const response = await api.get(`/admin/users/${userId}/stocks`)
     return response.data
@@ -284,7 +284,7 @@ export const removeUserStock = async (symbol) => {
   }
 }
 
-export const getUserStockList = async () => {
+export const getUserStocks = async () => {
   try {
     const response = await api.get('/auth/stocks')
     return response.data

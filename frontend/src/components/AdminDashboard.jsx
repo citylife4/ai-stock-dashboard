@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { 
   Settings, LogOut, User, Users, BarChart3, Crown, Shield, Zap,
-  RefreshCw, AlertCircle, Check, X, Edit2, Save, Database, Activity 
+  RefreshCw, AlertCircle, Check, X, Edit2, Save, Database, Activity, Brain 
 } from 'lucide-react'
 import { 
   getUsers, updateUser, getAdminStats, getAuditLogs,
-  getConfig, updateConfig, forceRefresh, adminLogout 
+  getConfig, updateConfig, forceRefresh, adminLogout, getAdminUserStocks
 } from '../services/api'
+import AIConfiguration from './AIConfiguration'
 import './AdminDashboard.css'
 
 function AdminDashboard({ onLogout }) {
@@ -235,11 +236,18 @@ function AdminDashboard({ onLogout }) {
             Statistics
           </button>
           <button 
+            onClick={() => setActiveTab('ai')}
+            className={`nav-btn ${activeTab === 'ai' ? 'active' : ''}`}
+          >
+            <Brain size={16} />
+            AI Configuration
+          </button>
+          <button 
             onClick={() => setActiveTab('config')}
             className={`nav-btn ${activeTab === 'config' ? 'active' : ''}`}
           >
             <Database size={16} />
-            Configuration
+            System Config
           </button>
           <button 
             onClick={() => setActiveTab('logs')}
@@ -469,6 +477,12 @@ function AdminDashboard({ onLogout }) {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === 'ai' && (
+            <div className="tab-content">
+              <AIConfiguration />
             </div>
           )}
 

@@ -81,7 +81,8 @@ async def get_current_user_info(current_user: User = Depends(get_current_active_
         subscription_tier=current_user.subscription_tier,
         max_stocks=current_user.max_stocks,
         created_at=current_user.created_at,
-        is_active=current_user.is_active
+        is_active=current_user.is_active,
+        is_admin=getattr(current_user, 'is_admin', False)
     )
 
 @router.post("/stocks/{symbol}")

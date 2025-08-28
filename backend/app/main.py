@@ -32,6 +32,15 @@ async def lifespan(app: FastAPI):
     # Connect to database
     await connect_to_mongo()
     
+    # Ensure admin user exists
+    from .services.user_service import UserService
+    user_service = UserService()
+    await user_service.ensure_admin_user_exists(
+        username=config.ADMIN_USERNAME,
+        email=f"{config.ADMIN_USERNAME}@admin.local",
+        password=config.ADMIN_PASSWORD
+    )
+    
     scheduler_service = SchedulerService()
     set_scheduler_service(scheduler_service)
     scheduler_service.start()
