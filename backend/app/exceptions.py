@@ -16,6 +16,11 @@ class AlphaVantageException(StockDataException):
     pass
 
 
+class PolygonException(StockDataException):
+    """Exception raised when Polygon.io API fails."""
+    pass
+
+
 class AIAnalysisException(Exception):
     """Base exception for AI analysis related errors."""
     pass

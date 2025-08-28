@@ -528,3 +528,23 @@
     flex-direction: column;
   }
 }
+
+/* Section divider styles */
+.section-divider {
+  margin: 2rem 0 1.5rem 0;
+  padding-top: 1.5rem;
+  border-top: 2px solid #e2e8f0;
+}
+
+.section-divider h3 {
+  margin: 0 0 0.5rem 0;
+  color: #2d3748;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.section-divider p {
+  margin: 0;
+  color: #718096;
+  font-size: 0.9rem;
+}

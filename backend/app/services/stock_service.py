@@ -1,11 +1,12 @@
 from alpha_vantage.timeseries import TimeSeries
 import yfinance as yf
+from polygon import RESTClient
 import random
 from datetime import datetime
 from typing import List, Optional
 from ..models import StockData
 from ..config import config
-from ..exceptions import YahooFinanceException, AlphaVantageException
+from ..exceptions import YahooFinanceException, AlphaVantageException, PolygonException
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,6 +16,7 @@ class StockService:
     def __init__(self):
         self.use_mock_data = True  # Start with mock data, will switch based on configuration and connectivity
         self.alpha_vantage = None
+        self.polygon_client = None
         self._initialize_data_sources()
         
     def _initialize_data_sources(self):
@@ -31,6 +33,16 @@ class StockService:
                     logger.warning(f"Failed to initialize Alpha Vantage client: {e}")
             else:
                 logger.warning("Alpha Vantage selected but no API key provided")
+        elif data_source == "polygon":
+            api_key = config.get_polygon_api_key()
+            if api_key:
+                try:
+                    self.polygon_client = RESTClient(api_key=api_key)
+                    logger.info("Polygon.io client initialized")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize Polygon.io client: {e}")
+            else:
+                logger.warning("Polygon.io selected but no API key provided")
         
         # Test connection and set data mode
         self.test_real_data_connection()
@@ -53,9 +65,11 @@ class StockService:
                     data_source = config.get_data_source()
                     if data_source == "alpha_vantage":
                         raise AlphaVantageException(f"Alpha Vantage API connection failed for symbol {symbol}")
+                    elif data_source == "polygon":
+                        raise PolygonException(f"Polygon.io API connection failed for symbol {symbol}")
                     else:
                         raise YahooFinanceException(f"Yahoo Finance API connection failed for symbol {symbol}")
-        except (YahooFinanceException, AlphaVantageException):
+        except (YahooFinanceException, AlphaVantageException, PolygonException):
             # Re-raise these exceptions so they bubble up
             raise
         except Exception as e:
@@ -68,6 +82,8 @@ class StockService:
                 data_source = config.get_data_source()
                 if data_source == "alpha_vantage":
                     raise AlphaVantageException(f"Alpha Vantage API error for symbol {symbol}: {str(e)}")
+                elif data_source == "polygon":
+                    raise PolygonException(f"Polygon.io API error for symbol {symbol}: {str(e)}")
                 else:
                     raise YahooFinanceException(f"Yahoo Finance API error for symbol {symbol}: {str(e)}")
     
@@ -93,6 +109,8 @@ class StockService:
         
         if data_source == "alpha_vantage":
             return self._fetch_alpha_vantage_data(symbol)
+        elif data_source == "polygon":
+            return self._fetch_polygon_data(symbol)
         else:  # Default to Yahoo Finance
             return self._fetch_yahoo_data(symbol)
     
@@ -191,6 +209,80 @@ class StockService:
             else:
                 raise AlphaVantageException(error_msg)
     
+    def _fetch_polygon_data(self, symbol: str) -> Optional[StockData]:
+        """Fetch real stock data using Polygon.io."""
+        try:
+            if not self.polygon_client:
+                error_msg = f"Polygon.io client not initialized for {symbol}"
+                logger.warning(error_msg)
+                if config.DEBUG:
+                    return self._generate_mock_data(symbol)
+                else:
+                    raise PolygonException(error_msg)
+            
+            # Get previous close
+            prev_close_response = self.polygon_client.get_previous_close_agg(symbol)
+            if not prev_close_response or not prev_close_response.results:
+                error_msg = f"No previous close data for {symbol} from Polygon.io"
+                logger.warning(error_msg)
+                if config.DEBUG:
+                    return self._generate_mock_data(symbol)
+                else:
+                    raise PolygonException(error_msg)
+            
+            prev_close_data = prev_close_response.results[0]
+            previous_close = prev_close_data.c
+            
+            # Get current day aggregates (if available)
+            try:
+                from datetime import date
+                today = date.today().strftime('%Y-%m-%d')
+                current_agg_response = self.polygon_client.get_aggs(
+                    symbol, 1, "day", today, today
+                )
+                
+                if current_agg_response and current_agg_response.results:
+                    current_data = current_agg_response.results[0]
+                    current_price = current_data.c
+                    volume = current_data.v
+                else:
+                    # Fall back to previous close as current price
+                    current_price = previous_close
+                    volume = prev_close_data.v
+            except:
+                # Fall back to previous close data
+                current_price = previous_close
+                volume = prev_close_data.v
+            
+            # Get ticker details for market cap
+            ticker_details = self.polygon_client.get_ticker_details(symbol)
+            market_cap = None
+            if ticker_details and hasattr(ticker_details, 'market_cap'):
+                market_cap = ticker_details.market_cap
+            
+            # Calculate change percentage
+            change_percent = ((current_price - previous_close) / previous_close) * 100
+            
+            return StockData(
+                symbol=symbol,
+                current_price=current_price,
+                previous_close=previous_close,
+                change_percent=change_percent,
+                volume=volume,
+                market_cap=market_cap,
+                last_updated=datetime.now()
+            )
+        except PolygonException:
+            # Re-raise our custom exception
+            raise
+        except Exception as e:
+            error_msg = f"Error fetching Polygon.io data for {symbol}: {e}"
+            logger.error(error_msg)
+            if config.DEBUG:
+                return self._generate_mock_data(symbol)
+            else:
+                raise PolygonException(error_msg)
+    
     def _generate_mock_data(self, symbol: str) -> StockData:
         """Generate realistic mock stock data."""
         # Base prices for common stocks
@@ -261,6 +353,19 @@ class StockService:
                 if quote_data and '05. price' in quote_data:
                     self.use_mock_data = False
                     logger.info("Successfully connected to Alpha Vantage stock data")
+                    return True
+            elif data_source == "polygon":
+                if not self.polygon_client:
+                    logger.warning("Polygon.io selected but client not initialized")
+                    self.use_mock_data = True
+                    logger.info("Using mock stock data")
+                    return False
+                    
+                # Test with AAPL
+                ticker_data = self.polygon_client.get_ticker_details("AAPL")
+                if ticker_data and hasattr(ticker_data, 'ticker'):
+                    self.use_mock_data = False
+                    logger.info("Successfully connected to Polygon.io stock data")
                     return True
             else:  # Yahoo Finance
                 stock = yf.Ticker("AAPL")

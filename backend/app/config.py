@@ -13,6 +13,9 @@ class Config:
     # Alpha Vantage Configuration (fallback from environment)
     ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
     
+    # Polygon.io Configuration (fallback from environment)
+    POLYGON_API_KEY = os.getenv("POLYGON_API_KEY")
+    
     # Server Configuration
     HOST = os.getenv("HOST", "localhost")
     PORT = int(os.getenv("PORT", 8000))
@@ -72,7 +75,10 @@ class Config:
             "stock_symbols": cls._DEFAULT_STOCK_SYMBOLS,
             "ai_analysis_prompt": cls._DEFAULT_AI_ANALYSIS_PROMPT.strip(),
             "data_source": "yahoo",  # Default to Yahoo Finance
-            "alpha_vantage_api_key": cls.ALPHA_VANTAGE_API_KEY or ""
+            "alpha_vantage_api_key": cls.ALPHA_VANTAGE_API_KEY or "",
+            "polygon_api_key": cls.POLYGON_API_KEY or "",
+            "ai_provider": "openai",  # Default AI provider
+            "ai_model": "gpt-3.5-turbo"  # Default AI model
         }
     
     @classmethod
@@ -127,7 +133,7 @@ class Config:
     @classmethod
     def update_data_source(cls, data_source: str) -> bool:
         """Update data source in dynamic config."""
-        if data_source not in ["yahoo", "alpha_vantage"]:
+        if data_source not in ["yahoo", "alpha_vantage", "polygon"]:
             return False
         config_data = cls.load_dynamic_config()
         config_data["data_source"] = data_source
@@ -138,6 +144,47 @@ class Config:
         """Update Alpha Vantage API key in dynamic config."""
         config_data = cls.load_dynamic_config()
         config_data["alpha_vantage_api_key"] = api_key
+        return cls.save_dynamic_config(config_data)
+    
+    @classmethod
+    def get_polygon_api_key(cls) -> str:
+        """Get Polygon.io API key from dynamic config or environment."""
+        config_data = cls.load_dynamic_config()
+        return config_data.get("polygon_api_key") or cls.POLYGON_API_KEY or ""
+    
+    @classmethod
+    def update_polygon_api_key(cls, api_key: str) -> bool:
+        """Update Polygon.io API key in dynamic config."""
+        config_data = cls.load_dynamic_config()
+        config_data["polygon_api_key"] = api_key
+        return cls.save_dynamic_config(config_data)
+    
+    @classmethod
+    def get_ai_provider(cls) -> str:
+        """Get AI provider from dynamic config."""
+        config_data = cls.load_dynamic_config()
+        return config_data.get("ai_provider", "openai")
+    
+    @classmethod
+    def get_ai_model(cls) -> str:
+        """Get AI model from dynamic config."""
+        config_data = cls.load_dynamic_config()
+        return config_data.get("ai_model", "gpt-3.5-turbo")
+    
+    @classmethod
+    def update_ai_provider(cls, provider: str) -> bool:
+        """Update AI provider in dynamic config."""
+        if provider not in ["openai", "groq"]:
+            return False
+        config_data = cls.load_dynamic_config()
+        config_data["ai_provider"] = provider
+        return cls.save_dynamic_config(config_data)
+    
+    @classmethod
+    def update_ai_model(cls, model: str) -> bool:
+        """Update AI model in dynamic config."""
+        config_data = cls.load_dynamic_config()
+        config_data["ai_model"] = model
         return cls.save_dynamic_config(config_data)
 
 

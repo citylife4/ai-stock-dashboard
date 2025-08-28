@@ -19,6 +19,10 @@ class AIService:
         if config.GROQ_API_KEY:
             self.groq_client = Groq(api_key=config.GROQ_API_KEY)
     
+    def refresh_ai_config(self):
+        """Refresh AI configuration - call when config changes."""
+        self.use_mock_analysis = not (config.OPENAI_API_KEY or config.GROQ_API_KEY)
+    
     def analyze_stock(self, stock_data: StockData) -> AIAnalysis:
         """Analyze stock data using AI or mock analysis."""
         try:
@@ -35,7 +39,9 @@ class AIService:
                     else:
                         raise OpenAIException("OpenAI API not available but was expected")
             else:
-                if config.GROQ_API_KEY:
+                # Use configured provider
+                ai_provider = config.get_ai_provider()
+                if ai_provider == "groq" and config.GROQ_API_KEY:
                     return self._get_real_analysis_groq(stock_data)
                 else:
                     return self._get_real_analysis_open_ai(stock_data)
@@ -69,7 +75,7 @@ class AIService:
             )
             
             completion = self.groq_client.chat.completions.create(
-                model="compound-beta-mini",
+                model=config.get_ai_model(),
                 messages=[
                 {
                     "role": "system",
@@ -125,7 +131,7 @@ class AIService:
             )
             
             response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
+                model=config.get_ai_model(),
                 messages=[
                     {
                         "role": "system", 

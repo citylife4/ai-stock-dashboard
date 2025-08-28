@@ -219,8 +219,17 @@ async def get_config(current_admin: str = Depends(get_current_admin)):
     """Get current data source and API key configuration."""
     try:
         data_source = config.get_data_source()
-        api_key = config.get_alpha_vantage_api_key()
-        return AdminConfigResponse(data_source=data_source, alpha_vantage_api_key=api_key)
+        alpha_vantage_api_key = config.get_alpha_vantage_api_key()
+        polygon_api_key = config.get_polygon_api_key()
+        ai_provider = config.get_ai_provider()
+        ai_model = config.get_ai_model()
+        return AdminConfigResponse(
+            data_source=data_source, 
+            alpha_vantage_api_key=alpha_vantage_api_key,
+            polygon_api_key=polygon_api_key,
+            ai_provider=ai_provider,
+            ai_model=ai_model
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving configuration: {str(e)}")
 
@@ -235,8 +244,8 @@ async def update_config(
         updated = False
         
         if request.data_source is not None:
-            if request.data_source not in ["yahoo", "alpha_vantage"]:
-                raise HTTPException(status_code=400, detail="Invalid data source. Must be 'yahoo' or 'alpha_vantage'")
+            if request.data_source not in ["yahoo", "alpha_vantage", "polygon"]:
+                raise HTTPException(status_code=400, detail="Invalid data source. Must be 'yahoo', 'alpha_vantage', or 'polygon'")
             
             if not config.update_data_source(request.data_source):
                 raise HTTPException(status_code=500, detail="Failed to update data source")
@@ -255,6 +264,39 @@ async def update_config(
             audit_service.log_action(
                 "update_api_key", 
                 "Updated Alpha Vantage API key", 
+                current_admin
+            )
+            updated = True
+        
+        if request.polygon_api_key is not None:
+            if not config.update_polygon_api_key(request.polygon_api_key):
+                raise HTTPException(status_code=500, detail="Failed to update Polygon.io API key")
+            
+            audit_service.log_action(
+                "update_api_key", 
+                "Updated Polygon.io API key", 
+                current_admin
+            )
+            updated = True
+        
+        if request.ai_provider is not None:
+            if not config.update_ai_provider(request.ai_provider):
+                raise HTTPException(status_code=500, detail="Failed to update AI provider")
+            
+            audit_service.log_action(
+                "update_ai_provider", 
+                f"Changed AI provider to {request.ai_provider}", 
+                current_admin
+            )
+            updated = True
+        
+        if request.ai_model is not None:
+            if not config.update_ai_model(request.ai_model):
+                raise HTTPException(status_code=500, detail="Failed to update AI model")
+            
+            audit_service.log_action(
+                "update_ai_model", 
+                f"Changed AI model to {request.ai_model}", 
                 current_admin
             )
             updated = True
