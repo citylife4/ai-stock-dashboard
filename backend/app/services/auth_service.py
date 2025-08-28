@@ -84,7 +84,7 @@ class AuthService:
         # Get user document to access password hash
         from ..database import get_database
         db = get_database()
-        if not db:
+        if db is None:
             return None
             
         try:
