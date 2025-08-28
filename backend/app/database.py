@@ -13,6 +13,7 @@ async def connect_to_mongo():
     """Create database connection."""
     global client, database
     try:
+        logger.info(f"Connecting to MongoDB")
         # Use environment variable or default to local MongoDB
         mongo_url = config.MONGODB_URL or "mongodb://localhost:27017"
         client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000)
@@ -44,7 +45,7 @@ async def close_mongo_connection():
 
 async def create_indexes():
     """Create database indexes for performance."""
-    if not database:
+    if database is None:
         return
     
     try:
