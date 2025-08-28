@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from datetime import datetime
 from typing import List
 
-from ..models import DashboardResponse, StockAnalysis
+from ..models import DashboardResponse, StockAnalysis, ApiError
 from ..services.scheduler import SchedulerService
 
 router = APIRouter()
@@ -32,17 +32,30 @@ async def get_dashboard():
         service = get_scheduler_service()
         analysis_results = service.get_latest_analysis()
         last_updated = service.get_last_updated()
+        latest_errors = service.get_latest_errors()
         
-        if not analysis_results:
-            # If no data available, force an update
+        if not analysis_results and not latest_errors:
+            # If no data available and no errors, force an update
             service.force_update()
             analysis_results = service.get_latest_analysis()
             last_updated = service.get_last_updated()
+            latest_errors = service.get_latest_errors()
+        
+        # Convert error dictionaries to ApiError objects
+        api_errors = [
+            ApiError(
+                type=error["type"],
+                symbol=error["symbol"],
+                message=error["message"]
+            )
+            for error in latest_errors
+        ]
         
         return DashboardResponse(
             stocks=analysis_results,
             last_updated=last_updated or datetime.now(),
-            total_stocks=len(analysis_results)
+            total_stocks=len(analysis_results),
+            errors=api_errors
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving dashboard data: {str(e)}")

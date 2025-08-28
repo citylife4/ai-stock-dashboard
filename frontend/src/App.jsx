@@ -90,6 +90,20 @@ function Dashboard() {
 
         {dashboardData && (
           <>
+            {/* Show API errors if any */}
+            {dashboardData.errors && dashboardData.errors.length > 0 && (
+              <div className="api-errors">
+                <h3>⚠️ API Issues Detected</h3>
+                <div className="error-list">
+                  {dashboardData.errors.map((apiError, index) => (
+                    <div key={index} className={`error-item ${apiError.type}`}>
+                      <strong>{apiError.symbol}:</strong> {apiError.message}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="dashboard-stats">
               <div className="stat-card">
                 <DollarSign size={20} />

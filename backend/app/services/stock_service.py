@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import List, Optional
 from ..models import StockData
 from ..config import config
+from ..exceptions import YahooFinanceException, AlphaVantageException
 import logging
 
 logger = logging.getLogger(__name__)
@@ -44,18 +45,46 @@ class StockService:
             if not self.use_mock_data:
                 return self._fetch_real_data(symbol)
             else:
-                return self._generate_mock_data(symbol)
+                if config.DEBUG:
+                    # In development, fall back to mock data
+                    return self._generate_mock_data(symbol)
+                else:
+                    # In production, raise exception instead of using mock data
+                    data_source = config.get_data_source()
+                    if data_source == "alpha_vantage":
+                        raise AlphaVantageException(f"Alpha Vantage API connection failed for symbol {symbol}")
+                    else:
+                        raise YahooFinanceException(f"Yahoo Finance API connection failed for symbol {symbol}")
+        except (YahooFinanceException, AlphaVantageException):
+            # Re-raise these exceptions so they bubble up
+            raise
         except Exception as e:
             logger.error(f"Error fetching data for {symbol}: {e}")
-            return self._generate_mock_data(symbol)
+            if config.DEBUG:
+                # In development, fall back to mock data
+                return self._generate_mock_data(symbol)
+            else:
+                # In production, raise exception with details
+                data_source = config.get_data_source()
+                if data_source == "alpha_vantage":
+                    raise AlphaVantageException(f"Alpha Vantage API error for symbol {symbol}: {str(e)}")
+                else:
+                    raise YahooFinanceException(f"Yahoo Finance API error for symbol {symbol}: {str(e)}")
     
     def fetch_multiple_stocks(self, symbols: List[str]) -> List[StockData]:
         """Fetch stock data for multiple symbols."""
         stocks = []
         for symbol in symbols:
-            stock_data = self.fetch_stock_data(symbol)
-            if stock_data:
-                stocks.append(stock_data)
+            try:
+                stock_data = self.fetch_stock_data(symbol)
+                if stock_data:
+                    stocks.append(stock_data)
+            except (YahooFinanceException, AlphaVantageException) as e:
+                # In production, don't skip the error but let it bubble up
+                if not config.DEBUG:
+                    raise
+                # In development, log the error and continue
+                logger.error(f"Error fetching data for {symbol}: {e}")
         return stocks
     
     def _fetch_real_data(self, symbol: str) -> Optional[StockData]:
@@ -75,8 +104,12 @@ class StockService:
             hist = stock.history(period="2d")
             
             if hist.empty or len(hist) < 2:
-                logger.warning(f"Insufficient data for {symbol}, using mock data")
-                return self._generate_mock_data(symbol)
+                error_msg = f"Insufficient data for {symbol} from Yahoo Finance"
+                logger.warning(error_msg)
+                if config.DEBUG:
+                    return self._generate_mock_data(symbol)
+                else:
+                    raise YahooFinanceException(error_msg)
             
             current_price = hist['Close'].iloc[-1]
             previous_close = hist['Close'].iloc[-2]
@@ -94,23 +127,38 @@ class StockService:
                 market_cap=market_cap,
                 last_updated=datetime.now()
             )
+        except YahooFinanceException:
+            # Re-raise our custom exception
+            raise
         except Exception as e:
-            logger.error(f"Error fetching Yahoo Finance data for {symbol}: {e}")
-            return self._generate_mock_data(symbol)
+            error_msg = f"Error fetching Yahoo Finance data for {symbol}: {e}"
+            logger.error(error_msg)
+            if config.DEBUG:
+                return self._generate_mock_data(symbol)
+            else:
+                raise YahooFinanceException(error_msg)
     
     def _fetch_alpha_vantage_data(self, symbol: str) -> Optional[StockData]:
         """Fetch real stock data using Alpha Vantage."""
         try:
             if not self.alpha_vantage:
-                logger.warning(f"Alpha Vantage client not initialized for {symbol}, using mock data")
-                return self._generate_mock_data(symbol)
+                error_msg = f"Alpha Vantage client not initialized for {symbol}"
+                logger.warning(error_msg)
+                if config.DEBUG:
+                    return self._generate_mock_data(symbol)
+                else:
+                    raise AlphaVantageException(error_msg)
             
             # Get quote data (current price info)
             quote_data, quote_meta = self.alpha_vantage.get_quote_endpoint(symbol)
             
             if not quote_data:
-                logger.warning(f"No quote data for {symbol}, using mock data")
-                return self._generate_mock_data(symbol)
+                error_msg = f"No quote data for {symbol} from Alpha Vantage"
+                logger.warning(error_msg)
+                if config.DEBUG:
+                    return self._generate_mock_data(symbol)
+                else:
+                    raise AlphaVantageException(error_msg)
             
             # Get daily data for historical comparison
             daily_data, daily_meta = self.alpha_vantage.get_daily(symbol, outputsize='compact')
@@ -132,9 +180,16 @@ class StockService:
                 market_cap=market_cap,
                 last_updated=datetime.now()
             )
+        except AlphaVantageException:
+            # Re-raise our custom exception
+            raise
         except Exception as e:
-            logger.error(f"Error fetching Alpha Vantage data for {symbol}: {e}")
-            return self._generate_mock_data(symbol)
+            error_msg = f"Error fetching Alpha Vantage data for {symbol}: {e}"
+            logger.error(error_msg)
+            if config.DEBUG:
+                return self._generate_mock_data(symbol)
+            else:
+                raise AlphaVantageException(error_msg)
     
     def _generate_mock_data(self, symbol: str) -> StockData:
         """Generate realistic mock stock data."""
