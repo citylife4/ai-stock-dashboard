@@ -74,15 +74,24 @@ class SchedulerService:
                         logger.error(error_msg)
                         continue
                         
-                    # Analyze stock
+                    # Analyze stock with AI
                     ai_analysis = self.ai_service.analyze_stock(stock_data)
+                    
+                    # Convert single AI analysis to multi-AI format for compatibility
+                    from ..models import MultiAIAnalysis
+                    multi_ai_analysis = MultiAIAnalysis(
+                        analyses=[ai_analysis],
+                        average_score=float(ai_analysis.score),
+                        timestamp=datetime.now()
+                    )
+                    
                     stock_analysis = StockAnalysis(
                         stock_data=stock_data,
-                        ai_analysis=ai_analysis,
+                        ai_analysis=multi_ai_analysis,
                         timestamp=datetime.now()
                     )
                     analysis_results.append(stock_analysis)
-                    logger.info(f"Analyzed {stock_data.symbol}: Score {ai_analysis.score}")
+                    logger.info(f"Analyzed {stock_data.symbol}: Score {multi_ai_analysis.average_score}")
                     
                 except StockDataException as e:
                     self.latest_errors.append({
@@ -109,8 +118,8 @@ class SchedulerService:
                     })
                     logger.error(error_msg)
             
-            # Sort by AI score (highest first)
-            analysis_results.sort(key=lambda x: x.ai_analysis.score, reverse=True)
+            # Sort by AI average score (highest first)
+            analysis_results.sort(key=lambda x: x.ai_analysis.average_score, reverse=True)
             
             # Update stored results
             self.latest_analysis = analysis_results

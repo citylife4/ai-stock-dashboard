@@ -85,23 +85,48 @@ function StockCard({ stockAnalysis, rank }) {
 
       <div className="ai-analysis">
         <div className="score-container">
-          <div className="score-label">AI Score</div>
+          <div className="score-label">
+            {ai_analysis.analyses.length > 1 ? 'Average AI Score' : 'AI Score'}
+          </div>
           <div 
             className="score-circle"
-            style={{ borderColor: getScoreColor(ai_analysis.score) }}
+            style={{ borderColor: getScoreColor(Math.round(ai_analysis.average_score)) }}
           >
             <span 
               className="score-value"
-              style={{ color: getScoreColor(ai_analysis.score) }}
+              style={{ color: getScoreColor(Math.round(ai_analysis.average_score)) }}
             >
-              {ai_analysis.score}
+              {Math.round(ai_analysis.average_score)}
             </span>
           </div>
         </div>
-        <div className="reason">
-          <h4>Analysis</h4>
-          <p>{ai_analysis.reason}</p>
-        </div>
+
+        {ai_analysis.analyses.length > 1 ? (
+          <div className="multi-ai-analyses">
+            <h4>AI Analyses ({ai_analysis.analyses.length} models)</h4>
+            <div className="ai-models">
+              {ai_analysis.analyses.map((analysis, index) => (
+                <div key={index} className="ai-model">
+                  <div className="ai-model-header">
+                    <span className="ai-model-name">{analysis.ai_model.replace('_', ' ')}</span>
+                    <span 
+                      className="ai-model-score"
+                      style={{ color: getScoreColor(analysis.score) }}
+                    >
+                      {analysis.score}
+                    </span>
+                  </div>
+                  <p className="ai-model-reason">{analysis.reason}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="reason">
+            <h4>Analysis</h4>
+            <p>{ai_analysis.analyses[0].reason}</p>
+          </div>
+        )}
       </div>
     </div>
   )

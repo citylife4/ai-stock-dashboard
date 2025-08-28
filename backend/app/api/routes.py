@@ -66,27 +66,8 @@ async def get_dashboard():
                 last_updated = service.get_last_updated()
                 latest_errors = service.get_latest_errors()
             
-            # Convert to new format with multi-AI
-            converted_results = []
-            for old_analysis in analysis_results:
-                # Convert old single AI analysis to multi-AI format
-                from ..models import MultiAIAnalysis, AIAnalysis, AIModelType
-                multi_ai_analysis = MultiAIAnalysis(
-                    analyses=[AIAnalysis(
-                        ai_model=AIModelType.BASIC,
-                        score=old_analysis.ai_analysis.score,
-                        reason=old_analysis.ai_analysis.reason
-                    )],
-                    average_score=float(old_analysis.ai_analysis.score),
-                    timestamp=old_analysis.timestamp
-                )
-                
-                new_analysis = StockAnalysis(
-                    stock_data=old_analysis.stock_data,
-                    ai_analysis=multi_ai_analysis,
-                    timestamp=old_analysis.timestamp
-                )
-                converted_results.append(new_analysis)
+            # The analysis_results now already contain MultiAIAnalysis, no conversion needed
+            converted_results = analysis_results
             
             api_errors = [
                 ApiError(
@@ -181,23 +162,8 @@ async def get_stock_analysis(symbol: str):
         
         for analysis in analysis_results:
             if analysis.stock_data.symbol.upper() == symbol.upper():
-                # Convert old format to new format
-                from ..models import MultiAIAnalysis, AIAnalysis, AIModelType
-                multi_ai_analysis = MultiAIAnalysis(
-                    analyses=[AIAnalysis(
-                        ai_model=AIModelType.BASIC,
-                        score=analysis.ai_analysis.score,
-                        reason=analysis.ai_analysis.reason
-                    )],
-                    average_score=float(analysis.ai_analysis.score),
-                    timestamp=analysis.timestamp
-                )
-                
-                return StockAnalysis(
-                    stock_data=analysis.stock_data,
-                    ai_analysis=multi_ai_analysis,
-                    timestamp=analysis.timestamp
-                )
+                # Return analysis (already in multi-AI format)
+                return analysis
         
         raise HTTPException(status_code=404, detail=f"Stock {symbol} not found in current analysis")
             

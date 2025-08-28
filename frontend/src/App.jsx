@@ -1,18 +1,40 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom'
-import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Clock, Settings } from 'lucide-react'
+import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Clock, Settings, User, LogOut } from 'lucide-react'
 import './App.css'
 import StockCard from './components/StockCard'
 import AdminLogin from './components/AdminLogin'
 import AdminDashboard from './components/AdminDashboard'
+import UserAuth from './components/UserAuth'
 import { fetchDashboard, refreshDashboard, adminLogin, initializeAuth, getAuthToken } from './services/api'
 
 function Dashboard() {
   const [dashboardData, setDashboardData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [user, setUser] = useState(null)
+  const [showUserAuth, setShowUserAuth] = useState(false)
   const navigate = useNavigate()
   const isAuthenticated = !!getAuthToken()
+
+  useEffect(() => {
+    // Check for existing user session
+    const userData = localStorage.getItem('userData')
+    if (userData) {
+      setUser(JSON.parse(userData))
+    }
+  }, [])
+
+  const handleUserLogin = (userData) => {
+    setUser(userData)
+  }
+
+  const handleUserLogout = () => {
+    localStorage.removeItem('userToken')
+    localStorage.removeItem('userData')
+    setUser(null)
+    loadDashboard() // Reload dashboard without user context
+  }
 
   const loadDashboard = async () => {
     try {
@@ -62,6 +84,30 @@ function Dashboard() {
               <Clock size={16} />
               <span>Updated: {dashboardData?.last_updated ? formatLastUpdated(dashboardData.last_updated) : 'Never'}</span>
             </div>
+            
+            {user ? (
+              <div className="user-menu">
+                <div className="user-info">
+                  <User size={16} />
+                  <span>{user.username}</span>
+                  <span className="subscription-badge">{user.subscription_tier}</span>
+                  <span className="stock-count">{dashboardData?.total_stocks || 0}/{user.max_stocks}</span>
+                </div>
+                <button onClick={handleUserLogout} className="logout-btn">
+                  <LogOut size={16} />
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <button 
+                onClick={() => setShowUserAuth(true)}
+                className="login-btn"
+              >
+                <User size={16} />
+                Login / Sign Up
+              </button>
+            )}
+            
             {isAuthenticated ? (
               <button 
                 onClick={() => navigate('/admin')}
@@ -116,16 +162,25 @@ function Dashboard() {
                 <TrendingUp size={20} />
                 <div>
                   <h3>Top Score</h3>
-                  <p>{dashboardData.stocks && dashboardData.stocks.length > 0 ? dashboardData.stocks[0].ai_analysis.score : 'N/A'}</p>
+                  <p>{dashboardData.stocks && dashboardData.stocks.length > 0 ? Math.round(dashboardData.stocks[0].ai_analysis.average_score) : 'N/A'}</p>
                 </div>
               </div>
               <div className="stat-card">
                 <TrendingDown size={20} />
                 <div>
                   <h3>Lowest Score</h3>
-                  <p>{dashboardData.stocks && dashboardData.stocks.length > 0 ? dashboardData.stocks[dashboardData.stocks.length - 1].ai_analysis.score : 'N/A'}</p>
+                  <p>{dashboardData.stocks && dashboardData.stocks.length > 0 ? Math.round(dashboardData.stocks[dashboardData.stocks.length - 1].ai_analysis.average_score) : 'N/A'}</p>
                 </div>
               </div>
+              {user && (
+                <div className="stat-card subscription-card">
+                  <User size={20} />
+                  <div>
+                    <h3>Plan</h3>
+                    <p>{user.subscription_tier.toUpperCase()}</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="stocks-grid">
@@ -140,6 +195,13 @@ function Dashboard() {
           </>
         )}
       </main>
+      
+      {showUserAuth && (
+        <UserAuth 
+          onLogin={handleUserLogin}
+          onClose={() => setShowUserAuth(false)}
+        />
+      )}
     </div>
   )
 }
