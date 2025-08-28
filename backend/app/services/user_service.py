@@ -13,11 +13,17 @@ logger = logging.getLogger(__name__)
 
 class UserService:
     def __init__(self):
-        self.db = get_database()
+        # Don't get database at init time, get it when needed
+        pass
+    
+    @property
+    def db(self):
+        """Get database connection lazily."""
+        return get_database()
     
     async def create_user(self, user_data: UserCreate) -> Optional[User]:
         """Create a new user."""
-        if not self.db:
+        if self.db is None:
             return None
             
         try:
@@ -41,18 +47,8 @@ class UserService:
             result = await self.db.users.insert_one(user_doc)
             
             if result.inserted_id:
-                # Remove password_hash before creating User object and convert subscription_tier back to enum
-                user_response_doc = {
-                    "id": str(result.inserted_id),
-                    "username": user_doc["username"],
-                    "email": user_doc["email"],
-                    "subscription_tier": user_data.subscription_tier,  # Use original enum
-                    "max_stocks": user_doc["max_stocks"],
-                    "created_at": user_doc["created_at"],
-                    "updated_at": user_doc["updated_at"],
-                    "is_active": user_doc["is_active"]
-                }
-                return User(**user_response_doc)
+                user_doc["id"] = str(result.inserted_id)
+                return User(**user_doc)
                 
         except Exception as e:
             logger.error(f"Error creating user: {e}")
@@ -60,48 +56,28 @@ class UserService:
     
     async def get_user_by_email(self, email: str) -> Optional[User]:
         """Get user by email."""
-        if not self.db:
+        if self.db is None:
             return None
             
         try:
             user_doc = await self.db.users.find_one({"email": email})
             if user_doc:
-                # Convert to User object, handling subscription_tier enum conversion
-                user_response_doc = {
-                    "id": str(user_doc["_id"]),
-                    "username": user_doc["username"],
-                    "email": user_doc["email"],
-                    "subscription_tier": SubscriptionTier(user_doc["subscription_tier"]),
-                    "max_stocks": user_doc["max_stocks"],
-                    "created_at": user_doc["created_at"],
-                    "updated_at": user_doc["updated_at"],
-                    "is_active": user_doc["is_active"]
-                }
-                return User(**user_response_doc)
+                user_doc["id"] = str(user_doc["_id"])
+                return User(**user_doc)
         except Exception as e:
             logger.error(f"Error getting user by email: {e}")
             return None
     
     async def get_user_by_id(self, user_id: str) -> Optional[User]:
         """Get user by ID."""
-        if not self.db:
+        if self.db is None:
             return None
             
         try:
             user_doc = await self.db.users.find_one({"_id": ObjectId(user_id)})
             if user_doc:
-                # Convert to User object, handling subscription_tier enum conversion
-                user_response_doc = {
-                    "id": str(user_doc["_id"]),
-                    "username": user_doc["username"],
-                    "email": user_doc["email"],
-                    "subscription_tier": SubscriptionTier(user_doc["subscription_tier"]),
-                    "max_stocks": user_doc["max_stocks"],
-                    "created_at": user_doc["created_at"],
-                    "updated_at": user_doc["updated_at"],
-                    "is_active": user_doc["is_active"]
-                }
-                return User(**user_response_doc)
+                user_doc["id"] = str(user_doc["_id"])
+                return User(**user_doc)
         except Exception as e:
             logger.error(f"Error getting user by ID: {e}")
             return None
@@ -116,7 +92,7 @@ class UserService:
     
     async def update_user_subscription(self, user_id: str, subscription_tier: SubscriptionTier, max_stocks: Optional[int] = None) -> bool:
         """Update user subscription tier."""
-        if not self.db:
+        if self.db is None:
             return False
             
         try:
@@ -144,7 +120,7 @@ class UserService:
     
     async def get_all_users(self, skip: int = 0, limit: int = 100) -> List[AdminUserResponse]:
         """Get all users for admin panel."""
-        if not self.db:
+        if self.db is None:
             return []
             
         try:
@@ -173,7 +149,7 @@ class UserService:
     
     async def update_user_admin(self, user_id: str, update_data: AdminUserUpdate) -> bool:
         """Update user by admin."""
-        if not self.db:
+        if self.db is None:
             return False
             
         try:
@@ -211,11 +187,17 @@ class UserService:
 
 class UserStockService:
     def __init__(self):
-        self.db = get_database()
+        # Don't get database at init time, get it when needed
+        pass
+    
+    @property
+    def db(self):
+        """Get database connection lazily."""
+        return get_database()
     
     async def add_user_stock(self, user_id: str, symbol: str) -> bool:
         """Add stock to user's tracking list."""
-        if not self.db:
+        if self.db is None:
             return False
             
         try:
@@ -250,7 +232,7 @@ class UserStockService:
     
     async def remove_user_stock(self, user_id: str, symbol: str) -> bool:
         """Remove stock from user's tracking list."""
-        if not self.db:
+        if self.db is None:
             return False
             
         try:
@@ -267,7 +249,7 @@ class UserStockService:
     
     async def get_user_stocks(self, user_id: str) -> List[str]:
         """Get list of stocks tracked by user."""
-        if not self.db:
+        if self.db is None:
             return []
             
         try:
@@ -283,7 +265,7 @@ class UserStockService:
     
     async def get_all_tracked_symbols(self) -> List[str]:
         """Get all unique symbols being tracked by any user."""
-        if not self.db:
+        if self.db is None:
             return []
             
         try:
