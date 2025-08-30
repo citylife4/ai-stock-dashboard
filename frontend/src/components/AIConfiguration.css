@@ -343,10 +343,11 @@ input:checked + .slider:before {
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
+  color: #1f2937;
 }
 
 .stat-label {
-  color: #6b7280;
+  color: #6b7280 !important;
   font-size: 0.875rem;
   font-weight: 500;
 }

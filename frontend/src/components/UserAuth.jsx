@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { UserPlus, LogIn, Eye, EyeOff } from 'lucide-react'
-import { login } from '../services/api'
+import { login, register } from '../services/api'
 import './UserAuth.css'
 
 function UserAuth({ onLogin, onClose }) {
@@ -22,7 +22,7 @@ function UserAuth({ onLogin, onClose }) {
 
     try {
       if (isLoginMode) {
-        // Login using the proper API function
+        // Login using the enhanced API function
         const loginResponse = await login({
           email: formData.email,
           password: formData.password
@@ -31,29 +31,9 @@ function UserAuth({ onLogin, onClose }) {
         onLogin(loginResponse.user)
         onClose()
       } else {
-        // Register
-        const response = await fetch('/api/v1/auth/register', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(formData)
-        })
-
-        if (!response.ok) {
-          const errorData = await response.json()
-          
-          // Handle validation errors (422) which come as an array
-          if (Array.isArray(errorData.detail)) {
-            const errorMessages = errorData.detail.map(err => err.msg).join(', ')
-            throw new Error(errorMessages)
-          }
-          
-          // Handle other errors
-          throw new Error(errorData.detail || 'Registration failed')
-        }
-
-        const data = await response.json()
+        // Register using the enhanced API function
+        await register(formData)
+        
         // Auto-login after registration
         const loginResponse = await login({
           email: formData.email,
@@ -64,7 +44,9 @@ function UserAuth({ onLogin, onClose }) {
         onClose()
       }
     } catch (err) {
-      setError(err.message)
+      // Enhanced error handling with more details
+      setError(err.message || 'An unexpected error occurred')
+      console.error('Authentication error:', err)
     } finally {
       setLoading(false)
     }

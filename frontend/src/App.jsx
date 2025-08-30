@@ -7,6 +7,7 @@ import AdminDashboard from './components/AdminDashboard'
 import UserAuth from './components/UserAuth'
 import UserStockManager from './components/UserStockManager'
 import Welcome from './components/Welcome'
+import Header from './components/Header'
 
 import { fetchDashboard, refreshDashboard, getStatus, initializeAuth, getAuthToken, initializeUserAuth, getCurrentUser, logout } from './services/api'
 
@@ -17,8 +18,6 @@ function Dashboard() {
   const [error, setError] = useState(null)
   const [updateStatus, setUpdateStatus] = useState(null)
   const [user, setUser] = useState(null)
-  const [showUserAuth, setShowUserAuth] = useState(false)
-  const [showStockManager, setShowStockManager] = useState(false)
   const navigate = useNavigate()
   const isAuthenticated = !!getAuthToken()
 
@@ -46,12 +45,6 @@ function Dashboard() {
     logout()
     setUser(null)
     loadDashboard() // Reload dashboard without user context
-  }
-
-  // Check if current user is admin
-  const isUserAdmin = () => {
-    console.log('Checking admin status:', { user, is_admin: user?.is_admin, username: user?.username })
-    return user && (user.is_admin === true || user.username === 'admin')
   }
 
   const loadDashboard = async () => {
@@ -117,10 +110,6 @@ function Dashboard() {
     }
   }, [refreshing, updateStatus?.update_in_progress])
 
-  const formatLastUpdated = (timestamp) => {
-    return new Date(timestamp).toLocaleString()
-  }
-
   if (loading) {
     return (
       <div className="app">
@@ -136,17 +125,19 @@ function Dashboard() {
   if (!user) {
     return (
       <div className="app">
+        <Header 
+          user={user}
+          onLogin={handleUserLogin}
+          onLogout={handleUserLogout}
+          dashboardData={dashboardData}
+          onRefresh={handleRefresh}
+          refreshing={refreshing}
+          updateStatus={updateStatus}
+        />
         <Welcome 
           dashboardData={dashboardData} 
-          onShowAuth={() => setShowUserAuth(true)} 
+          onShowAuth={() => {/* Auth handled by Header */}} 
         />
-        
-        {showUserAuth && (
-          <UserAuth 
-            onLogin={handleUserLogin}
-            onClose={() => setShowUserAuth(false)}
-          />
-        )}
       </div>
     )
   }
@@ -154,59 +145,15 @@ function Dashboard() {
   // Show authenticated dashboard
   return (
     <div className="app">
-      <header className="app-header">
-        <div className="header-content">
-          <h1>
-            <TrendingUp className="header-icon" />
-            AI Stock Dashboard
-          </h1>
-          <div className="header-actions">
-            <button 
-              onClick={handleRefresh}
-              className={`refresh-btn ${refreshing || updateStatus?.update_in_progress ? 'refreshing' : ''}`}
-              disabled={refreshing || updateStatus?.update_in_progress}
-            >
-              <RefreshCw size={16} className={refreshing || updateStatus?.update_in_progress ? 'spinning' : ''} />
-              {refreshing || updateStatus?.update_in_progress ? 'Updating...' : 'Refresh'}
-            </button>
-            
-            <div className="last-updated">
-              <Clock size={16} />
-              <span>Updated: {dashboardData?.last_updated ? formatLastUpdated(dashboardData.last_updated) : 'Never'}</span>
-            </div>
-            <div className="user-menu">
-              <div className="user-info">
-                <User size={16} />
-                <span>{user.username}</span>
-                <span className="subscription-badge">{user.subscription_tier}</span>
-                <span className="stock-count">{dashboardData?.total_stocks || 0}/{user.max_stocks}</span>
-              </div>
-              <button 
-                onClick={() => setShowStockManager(true)}
-                className="manage-stocks-btn"
-                title="Manage your stocks"
-              >
-                <List size={16} />
-                Manage Stocks
-              </button>
-              <button onClick={handleUserLogout} className="logout-btn">
-                <LogOut size={16} />
-                Logout
-              </button>
-            </div>
-            {console.log('Render time admin check:', { user, isAdmin: isUserAdmin() })}
-            {isUserAdmin() ? (
-              <button 
-                onClick={() => navigate('/admin')}
-                className="admin-btn"
-              >
-                <Settings size={16} />
-                Admin
-              </button>
-            ) : null}
-          </div>
-        </div>
-      </header>
+      <Header 
+        user={user}
+        onLogin={handleUserLogin}
+        onLogout={handleUserLogout}
+        dashboardData={dashboardData}
+        onRefresh={handleRefresh}
+        refreshing={refreshing}
+        updateStatus={updateStatus}
+      />
 
       <main className="main-content">
         {error && (
@@ -293,20 +240,6 @@ function Dashboard() {
           </>
         )}
       </main>
-      
-      {showUserAuth && (
-        <UserAuth 
-          onLogin={handleUserLogin}
-          onClose={() => setShowUserAuth(false)}
-        />
-      )}
-      
-      {showStockManager && user && (
-        <UserStockManager 
-          user={user}
-          onClose={() => setShowStockManager(false)}
-        />
-      )}
     </div>
   )
 }
@@ -342,10 +275,28 @@ function AdminPage() {
 
   // Show loading while checking admin access
   if (!user) {
-    return <div>Loading...</div>
+    return (
+      <div className="app">
+        <Header 
+          user={null}
+          onLogin={() => {}}
+          onLogout={handleLogout}
+        />
+        <div>Loading...</div>
+      </div>
+    )
   }
 
-  return <AdminDashboard onLogout={handleLogout} />
+  return (
+    <div className="app">
+      <Header 
+        user={user}
+        onLogin={() => {}}
+        onLogout={handleLogout}
+      />
+      <AdminDashboard onLogout={handleLogout} />
+    </div>
+  )
 }
 
 function App() {
