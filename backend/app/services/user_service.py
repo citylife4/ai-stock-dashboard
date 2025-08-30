@@ -176,6 +176,24 @@ class UserService:
             logger.error(f"Error updating user by admin: {e}")
             return False
     
+    async def delete_user(self, user_id: str) -> bool:
+        """Delete user and all associated data."""
+        if self.db is None:
+            return False
+            
+        try:
+            # First, delete all user's stock tracking data
+            await self.db.user_stocks.delete_many({"user_id": user_id})
+            
+            # Then delete the user
+            result = await self.db.users.delete_one({"_id": ObjectId(user_id)})
+            
+            return result.deleted_count > 0
+            
+        except Exception as e:
+            logger.error(f"Error deleting user: {e}")
+            return False
+    
     def _get_subscription_limits(self, tier: SubscriptionTier) -> dict:
         """Get limits for subscription tier."""
         limits = {

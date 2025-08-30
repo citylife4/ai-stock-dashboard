@@ -373,6 +373,39 @@ async def update_user(
         raise HTTPException(status_code=500, detail=f"Error updating user: {str(e)}")
 
 
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: str,
+    current_admin: User = Depends(get_current_admin)
+):
+    """Delete a user and all associated data."""
+    try:
+        # Prevent admin from deleting themselves
+        if current_admin.id == user_id:
+            raise HTTPException(
+                status_code=400, 
+                detail="Admin cannot delete their own account"
+            )
+        
+        success = await user_service.delete_user(user_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="User not found or deletion failed")
+        
+        # Log the action
+        audit_service.log_action(
+            "delete_user",
+            f"Deleted user {user_id}",
+            current_admin.username
+        )
+        
+        return {"message": "User deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting user: {str(e)}")
+
+
 @router.get("/users/{user_id}/stocks")
 async def get_user_stocks(
     user_id: str,

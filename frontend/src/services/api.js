@@ -237,6 +237,17 @@ export const updateUser = async (userId, updateData) => {
   }
 }
 
+export const deleteUser = async (userId) => {
+  try {
+    const response = await api.delete(`/admin/users/${userId}`)
+    return response.data
+  } catch (error) {
+    throw handleApiError(error, `deleting user ${userId}`)
+  }
+}
+
+// User authentication API functions
+
 export const getAdminUserStocks = async (userId) => {
   try {
     const response = await api.get(`/admin/users/${userId}/stocks`)

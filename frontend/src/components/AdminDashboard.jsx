@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { 
   Settings, LogOut, User, Users, BarChart3, Crown, Shield, Zap,
-  RefreshCw, AlertCircle, Check, X, Edit2, Save, Database, Activity, Brain 
+  RefreshCw, AlertCircle, Check, X, Edit2, Save, Database, Activity, Brain, ArrowLeft, Trash2 
 } from 'lucide-react'
 import { 
-  getUsers, updateUser, getAdminStats, getAuditLogs,
+  getUsers, updateUser, deleteUser, getAdminStats, getAuditLogs,
   getConfig, updateConfig, forceRefresh, adminLogout, getAdminUserStocks
 } from '../services/api'
 import AIConfiguration from './AIConfiguration'
@@ -117,6 +117,27 @@ function AdminDashboard({ onLogout }) {
     }
   }
 
+  const handleDeleteUser = async (user) => {
+    // Confirm deletion
+    if (!window.confirm(`Are you sure you want to delete user "${user.username}"? This action cannot be undone and will also delete all their stock tracking data.`)) {
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      await deleteUser(user.id)
+      setSuccess(`User "${user.username}" deleted successfully`)
+      await loadData()
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to delete user')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleUpdateConfig = async () => {
     setLoading(true)
     setError(null)
@@ -180,9 +201,9 @@ function AdminDashboard({ onLogout }) {
     }
   }
 
-  const handleLogout = () => {
-    adminLogout()
-    onLogout()
+  const handleBack = () => {
+    // Navigate back to the main dashboard
+    window.history.back()
   }
 
   const clearMessages = () => {
@@ -212,9 +233,9 @@ function AdminDashboard({ onLogout }) {
             <Settings size={24} />
             Admin Dashboard
           </h1>
-          <button onClick={handleLogout} className="logout-btn">
-            <LogOut size={16} />
-            Logout
+          <button onClick={handleBack} className="back-btn">
+            <ArrowLeft size={16} />
+            Back
           </button>
         </div>
       </header>
@@ -393,13 +414,22 @@ function AdminDashboard({ onLogout }) {
                                 </button>
                               </>
                             ) : (
-                              <button
-                                onClick={() => handleEditUser(user)}
-                                className="edit-btn"
-                                disabled={loading}
-                              >
-                                <Edit2 size={14} />
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleEditUser(user)}
+                                  className="edit-btn"
+                                  disabled={loading}
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteUser(user)}
+                                  className="delete-btn"
+                                  disabled={loading}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </>
                             )}
                           </div>
                         </div>
