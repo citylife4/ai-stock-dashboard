@@ -35,9 +35,14 @@ function Dashboard() {
     }
   }, [])
 
-  const handleUserLogin = (userData) => {
-    console.log('User login data:', userData)
+    const handleUserLogin = (userData) => {
+    console.log('User login handler called with:', userData)
     setUser(userData)
+    // Force dashboard reload after login
+    setLastDashboardLoad(0)
+    setTimeout(() => {
+      loadDashboard(true) // Force load
+    }, 200) // Give time for user state to settle
   }
 
   // Debug effect to watch user state changes
@@ -52,11 +57,16 @@ function Dashboard() {
       console.log('User logged in, reloading dashboard for authenticated user')
       // Reset debounce timer to allow immediate reload
       setLastDashboardLoad(0)
-      loadDashboard()
+      // Force immediate dashboard load for login
+      setTimeout(() => {
+        loadDashboard(true) // Force load
+      }, 100) // Small delay to ensure state is settled
     } else if (!wasLoggedOut && !isNowLoggedIn) {
       console.log('User logged out, reloading dashboard for non-authenticated view')
       setLastDashboardLoad(0)
-      loadDashboard()
+      setTimeout(() => {
+        loadDashboard(true) // Force load
+      }, 100)
     }
     
     // Update ref for next comparison
@@ -68,10 +78,10 @@ function Dashboard() {
     setUser(null)
     // Reset debounce timer and reload dashboard for non-authenticated view
     setLastDashboardLoad(0)
-    loadDashboard()
+    loadDashboard(true) // Force load
   }
 
-  const loadDashboard = async () => {
+  const loadDashboard = async (forceLoad = false) => {
     try {
       // Prevent overlapping requests
       if (isLoadingDashboard) {
@@ -79,9 +89,9 @@ function Dashboard() {
         return
       }
       
-      // Prevent rapid successive calls (debounce)
+      // Prevent rapid successive calls (debounce) unless forced
       const now = Date.now()
-      if (now - lastDashboardLoad < 5000) { // 5 second minimum between calls
+      if (!forceLoad && now - lastDashboardLoad < 5000) { // 5 second minimum between calls
         console.log('Dashboard load debounced - last call was', (now - lastDashboardLoad), 'ms ago')
         return
       }
@@ -89,7 +99,7 @@ function Dashboard() {
       setIsLoadingDashboard(true)
       setLastDashboardLoad(now)
       
-      console.log('Loading dashboard at', new Date().toISOString())
+      console.log('Loading dashboard at', new Date().toISOString(), forceLoad ? '(forced)' : '')
       setError(null)
       const data = await fetchDashboard()
       setDashboardData(data)

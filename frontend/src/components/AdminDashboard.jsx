@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { 
   Settings, LogOut, User, Users, BarChart3, Crown, Shield, Zap,
-  RefreshCw, AlertCircle, Check, X, Edit2, Save, Database, Activity, Brain, ArrowLeft, Trash2, Plus, TrendingUp
+  RefreshCw, AlertCircle, Check, X, Edit2, Save, Database, Activity, Brain, ArrowLeft, Trash2, Plus, TrendingUp,
+  Target, Eye, Clock, Search, Filter, Download
 } from 'lucide-react'
 import { 
   getUsers, updateUser, deleteUser, getAdminStats, getAuditLogs, getAnalysisLogs,
   getConfig, updateConfig, forceRefresh, adminLogout, getAdminUserStocks,
-  getStockList, addStock, removeStock
+  getStockList, addStock, removeStock, fetchDashboard, getStatus
 } from '../services/api'
 import AIConfiguration from './AIConfiguration'
 import './AdminDashboard.css'
@@ -49,6 +50,15 @@ function AdminDashboard({ onLogout }) {
   
   // Analysis logs state
   const [analysisLogs, setAnalysisLogs] = useState(null)
+  
+  // Tracked stocks state
+  const [trackedStocks, setTrackedStocks] = useState([])
+  const [globalAnalysis, setGlobalAnalysis] = useState([])
+  const [systemStatus, setSystemStatus] = useState(null)
+  
+  // Stock management
+  const [newStock, setNewStock] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
 
   const subscriptionTiers = [
     { value: 'free', label: 'Free', maxStocks: 5, icon: User, color: '#6b7280' },
@@ -90,6 +100,18 @@ function AdminDashboard({ onLogout }) {
       } else if (activeTab === 'analysis') {
         const analysisData = await getAnalysisLogs(50)
         setAnalysisLogs(analysisData.analysis_logs)
+      } else if (activeTab === 'tracked-stocks') {
+        // Get tracked stocks and their analysis
+        const stocksData = await getStockList()
+        setTrackedStocks(stocksData.symbols)
+        
+        // Get global analysis results
+        const dashboardData = await fetchDashboard()
+        setGlobalAnalysis(dashboardData.stocks || [])
+        
+        // Get system status
+        const statusData = await getStatus()
+        setSystemStatus(statusData)
       }
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to load data')
@@ -201,8 +223,57 @@ function AdminDashboard({ onLogout }) {
     try {
       await forceRefresh()
       setSuccess('Stock data refresh initiated successfully')
+      
+      // Refresh the tracked stocks tab if it's active
+      if (activeTab === 'tracked-stocks') {
+        setTimeout(() => {
+          loadData()
+        }, 2000) // Wait 2 seconds then refresh data
+      }
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to refresh data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAddStock = async () => {
+    if (!newStock.trim()) {
+      setError('Please enter a stock symbol')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      await addStock({ symbol: newStock.toUpperCase() })
+      setSuccess(`Successfully added ${newStock.toUpperCase()} to tracked stocks`)
+      setNewStock('')
+      await loadData() // Refresh data
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to add stock')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRemoveStock = async (symbol) => {
+    if (!window.confirm(`Are you sure you want to remove ${symbol} from tracked stocks?`)) {
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      await removeStock(symbol)
+      setSuccess(`Successfully removed ${symbol} from tracked stocks`)
+      await loadData() // Refresh data
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to remove stock')
     } finally {
       setLoading(false)
     }
@@ -231,6 +302,33 @@ function AdminDashboard({ onLogout }) {
     polygonApiKey !== originalPolygonApiKey ||
     aiProvider !== originalAiProvider ||
     aiModel !== originalAiModel
+
+  const filteredStocks = trackedStocks.filter(symbol => 
+    symbol.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  const getStockAnalysis = (symbol) => {
+    return globalAnalysis.find(analysis => 
+      analysis.stock_data?.symbol?.toUpperCase() === symbol.toUpperCase()
+    )
+  }
+
+  const formatPrice = (price) => {
+    return price ? `$${price.toFixed(2)}` : 'N/A'
+  }
+
+  const formatPercent = (percent) => {
+    if (percent === null || percent === undefined) return 'N/A'
+    const sign = percent >= 0 ? '+' : ''
+    return `${sign}${percent.toFixed(2)}%`
+  }
+
+  const getScoreColor = (score) => {
+    if (score >= 80) return '#10b981' // green
+    if (score >= 60) return '#f59e0b' // amber
+    if (score >= 40) return '#ef4444' // red
+    return '#6b7280' // gray
+  }
 
   return (
     <div className="admin-dashboard">
@@ -262,6 +360,13 @@ function AdminDashboard({ onLogout }) {
           >
             <BarChart3 size={16} />
             Statistics
+          </button>
+          <button 
+            onClick={() => setActiveTab('tracked-stocks')}
+            className={`nav-btn ${activeTab === 'tracked-stocks' ? 'active' : ''}`}
+          >
+            <Target size={16} />
+            Tracked Stocks
           </button>
           <button 
             onClick={() => setActiveTab('ai')}
@@ -522,6 +627,228 @@ function AdminDashboard({ onLogout }) {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === 'tracked-stocks' && (
+            <div className="tab-content">
+              <div className="section-header">
+                <h2>Tracked Stocks Management</h2>
+                <p>Manage globally tracked stocks and monitor their AI analysis results.</p>
+              </div>
+
+              {/* System Status */}
+              {systemStatus && (
+                <div className="system-status">
+                  <div className="status-cards">
+                    <div className="status-card">
+                      <div className="card-header">
+                        <Activity size={20} />
+                        <h3>System Status</h3>
+                      </div>
+                      <div className="card-content">
+                        <div className="stat">
+                          <span className="label">Status:</span>
+                          <span className={`value status-${systemStatus.status}`}>
+                            {systemStatus.status}
+                          </span>
+                        </div>
+                        <div className="stat">
+                          <span className="label">Last Updated:</span>
+                          <span className="value">
+                            {systemStatus.last_updated 
+                              ? formatTimestamp(systemStatus.last_updated)
+                              : 'Never'
+                            }
+                          </span>
+                        </div>
+                        <div className="stat">
+                          <span className="label">Database:</span>
+                          <span className={`value status-${systemStatus.database_status}`}>
+                            {systemStatus.database_status}
+                          </span>
+                        </div>
+                        <div className="stat">
+                          <span className="label">Update in Progress:</span>
+                          <span className={`value ${systemStatus.update_in_progress ? 'text-warning' : 'text-success'}`}>
+                            {systemStatus.update_in_progress ? 'Yes' : 'No'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="status-card">
+                      <div className="card-header">
+                        <BarChart3 size={20} />
+                        <h3>Analysis Overview</h3>
+                      </div>
+                      <div className="card-content">
+                        <div className="stat">
+                          <span className="label">Stocks Configured:</span>
+                          <span className="value">{trackedStocks.length}</span>
+                        </div>
+                        <div className="stat">
+                          <span className="label">Successfully Analyzed:</span>
+                          <span className="value text-success">{globalAnalysis.length}</span>
+                        </div>
+                        <div className="stat">
+                          <span className="label">Missing Analysis:</span>
+                          <span className="value text-warning">
+                            {trackedStocks.length - globalAnalysis.length}
+                          </span>
+                        </div>
+                        <div className="stat">
+                          <span className="label">Total Users:</span>
+                          <span className="value">{systemStatus.total_users}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Add New Stock */}
+              <div className="add-stock-section">
+                <h3>Add New Stock</h3>
+                <div className="add-stock-form">
+                  <input
+                    type="text"
+                    value={newStock}
+                    onChange={(e) => setNewStock(e.target.value.toUpperCase())}
+                    placeholder="Enter stock symbol (e.g., AAPL)"
+                    disabled={loading}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        handleAddStock()
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={handleAddStock}
+                    disabled={loading || !newStock.trim()}
+                    className="add-btn"
+                  >
+                    <Plus size={16} />
+                    Add Stock
+                  </button>
+                  <button
+                    onClick={handleForceRefresh}
+                    disabled={loading}
+                    className="refresh-btn"
+                  >
+                    <RefreshCw className={loading ? 'spinning' : ''} size={16} />
+                    Refresh Analysis
+                  </button>
+                </div>
+              </div>
+
+              {/* Search and Filter */}
+              <div className="search-section">
+                <div className="search-input">
+                  <Search size={16} />
+                  <input
+                    type="text"
+                    placeholder="Search stocks..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                <span className="search-results">
+                  Showing {filteredStocks.length} of {trackedStocks.length} stocks
+                </span>
+              </div>
+
+              {/* Tracked Stocks List */}
+              <div className="tracked-stocks-container">
+                {loading ? (
+                  <div className="loading">
+                    <RefreshCw className="spin" size={16} />
+                    Loading tracked stocks...
+                  </div>
+                ) : filteredStocks.length === 0 ? (
+                  <div className="empty-state">
+                    <Target size={32} />
+                    <p>{searchTerm ? 'No stocks match your search' : 'No stocks configured yet'}</p>
+                  </div>
+                ) : (
+                  <div className="stocks-grid">
+                    {filteredStocks.map(symbol => {
+                      const analysis = getStockAnalysis(symbol)
+                      const hasAnalysis = !!analysis
+                      
+                      return (
+                        <div key={symbol} className={`stock-card ${!hasAnalysis ? 'no-analysis' : ''}`}>
+                          <div className="stock-header">
+                            <div className="stock-symbol">
+                              <h3>{symbol}</h3>
+                              {hasAnalysis && (
+                                <span 
+                                  className="ai-score"
+                                  style={{ color: getScoreColor(analysis.ai_analysis.average_score) }}
+                                >
+                                  {Math.round(analysis.ai_analysis.average_score)}
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => handleRemoveStock(symbol)}
+                              className="remove-btn"
+                              disabled={loading}
+                              title="Remove stock"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+
+                          {hasAnalysis ? (
+                            <div className="stock-data">
+                              <div className="stock-price">
+                                <span className="current-price">
+                                  {formatPrice(analysis.stock_data.current_price)}
+                                </span>
+                                <span className={`price-change ${analysis.stock_data.change_percent >= 0 ? 'positive' : 'negative'}`}>
+                                  {formatPercent(analysis.stock_data.change_percent)}
+                                </span>
+                              </div>
+                              
+                              <div className="stock-metrics">
+                                <div className="metric">
+                                  <span className="label">Volume:</span>
+                                  <span className="value">
+                                    {analysis.stock_data.volume ? analysis.stock_data.volume.toLocaleString() : 'N/A'}
+                                  </span>
+                                </div>
+                                <div className="metric">
+                                  <span className="label">Market Cap:</span>
+                                  <span className="value">
+                                    {analysis.stock_data.market_cap ? `$${analysis.stock_data.market_cap}` : 'N/A'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="ai-summary">
+                                <h4>AI Analysis Summary</h4>
+                                <p>{analysis.ai_analysis.analyses[0]?.summary || 'No summary available'}</p>
+                              </div>
+
+                              <div className="analysis-timestamp">
+                                <Clock size={12} />
+                                Last analyzed: {formatTimestamp(analysis.timestamp)}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="no-analysis-state">
+                              <AlertCircle size={20} />
+                              <p>Analysis pending</p>
+                              <small>Data will be available after next update</small>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
