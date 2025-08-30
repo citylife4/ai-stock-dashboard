@@ -3,7 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import datetime
 from typing import List, Optional
 
-from ..models import DashboardResponse, StockAnalysis, ApiError, User
+from ..models import DashboardResponse, StockAnalysis, ApiError, User, SubscriptionTier
 from ..services.scheduler import SchedulerService
 from ..services.user_service import UserStockService
 from ..services.multi_ai_service import MultiAIService
@@ -54,90 +54,18 @@ async def get_current_user_optional(credentials: Optional[HTTPAuthorizationCrede
 async def get_dashboard(current_user: Optional[User] = Depends(get_current_user_optional)):
     """Get the current stock dashboard data."""
     try:
-        # If user is not authenticated, return sample/welcome data
+        # If user is not authenticated, return empty welcome dashboard
         if not current_user or not is_database_available():
-            # Return sample data for welcome page
-            from ..models import StockData, AIAnalysis, MultiAIAnalysis, StockAnalysis, SubscriptionTier, AIModelType
-            
-            # Create sample stock data for demonstration
-            sample_stocks = [
-                StockAnalysis(
-                    stock_data=StockData(
-                        symbol="AAPL",
-                        current_price=175.50,
-                        previous_close=173.15,
-                        change_percent=1.36,
-                        volume=45678900,
-                        market_cap=2750000000000,
-                        last_updated=datetime.now()
-                    ),
-                    ai_analysis=MultiAIAnalysis(
-                        analyses=[
-                            AIAnalysis(
-                                ai_model=AIModelType.WARREN_BUFFET,
-                                score=85,
-                                reason="Strong technology company with solid fundamentals and excellent brand loyalty. High-quality business with durable competitive advantages."
-                            ),
-                            AIAnalysis(
-                                ai_model=AIModelType.PETER_LYNCH,
-                                score=82,
-                                reason="Growth company with strong innovation pipeline. Excellent management and consistent earnings growth."
-                            ),
-                            AIAnalysis(
-                                ai_model=AIModelType.DCF_MATH,
-                                score=88,
-                                reason="Strong free cash flow generation and healthy balance sheet. Fair valuation based on discounted cash flow analysis."
-                            )
-                        ],
-                        average_score=85.0,
-                        timestamp=datetime.now()
-                    ),
-                    timestamp=datetime.now()
-                ),
-                StockAnalysis(
-                    stock_data=StockData(
-                        symbol="TSLA",
-                        current_price=245.80,
-                        previous_close=249.00,
-                        change_percent=-1.28,
-                        volume=67890123,
-                        market_cap=780000000000,
-                        last_updated=datetime.now()
-                    ),
-                    ai_analysis=MultiAIAnalysis(
-                        analyses=[
-                            AIAnalysis(
-                                ai_model=AIModelType.WARREN_BUFFET,
-                                score=68,
-                                reason="High growth potential but significant volatility and competitive risks. Requires careful evaluation of long-term prospects."
-                            ),
-                            AIAnalysis(
-                                ai_model=AIModelType.PETER_LYNCH,
-                                score=75,
-                                reason="Market leader in EV technology with expanding global presence. High growth story but needs monitoring of execution."
-                            ),
-                            AIAnalysis(
-                                ai_model=AIModelType.DCF_MATH,
-                                score=73,
-                                reason="High growth assumptions reflected in current valuation. Sensitive to execution risk and competitive dynamics."
-                            )
-                        ],
-                        average_score=72.0,
-                        timestamp=datetime.now()
-                    ),
-                    timestamp=datetime.now()
-                )
-            ]
-            
+            # Return empty dashboard for non-authenticated users
             return DashboardResponse(
-                stocks=sample_stocks,
-                last_updated=datetime.now(),
-                total_stocks=2,
-                max_stocks=5,
-                subscription_tier=SubscriptionTier.FREE,
-                errors=[],
-                is_sample_data=True  # Add flag to indicate this is sample data
-            )
+            stocks=[],
+            last_updated=datetime.now(),
+            total_stocks=0,
+            max_stocks=5,
+            subscription_tier=SubscriptionTier.FREE,
+            errors=[],
+            is_sample_data=True
+        )
         
         # User is authenticated - show their personalized dashboard
         try:
@@ -148,7 +76,6 @@ async def get_dashboard(current_user: Optional[User] = Depends(get_current_user_
             
             # If user has no tracked stocks, return empty dashboard
             if not user_stocks:
-                from ..models import SubscriptionTier
                 tier_enum = SubscriptionTier.FREE
                 if subscription_tier == "pro":
                     tier_enum = SubscriptionTier.PRO
@@ -177,37 +104,9 @@ async def get_dashboard(current_user: Optional[User] = Depends(get_current_user_
                 if analysis.stock_data.symbol.upper() in [symbol.upper() for symbol in user_stocks]
             ]
             
-            # Create placeholder stock data for stocks without analysis
+            # Create error entries for user stocks that don't have analysis
             analyzed_symbols = {analysis.stock_data.symbol.upper() for analysis in filtered_results}
             missing_symbols = [symbol for symbol in user_stocks if symbol.upper() not in analyzed_symbols]
-            
-            # Add placeholder entries for missing stock analysis
-            from ..models import StockData, AIAnalysis, MultiAIAnalysis, StockAnalysis, AIModelType
-            for symbol in missing_symbols:
-                placeholder_stock = StockAnalysis(
-                    stock_data=StockData(
-                        symbol=symbol.upper(),
-                        current_price=0.00,
-                        previous_close=0.00,
-                        change_percent=0.00,
-                        volume=0,
-                        market_cap=0,
-                        last_updated=datetime.now()
-                    ),
-                    ai_analysis=MultiAIAnalysis(
-                        analyses=[
-                            AIAnalysis(
-                                ai_model=AIModelType.WARREN_BUFFET,
-                                score=0,
-                                reason="Analysis pending - data will be updated soon"
-                            )
-                        ],
-                        average_score=0.0,
-                        timestamp=datetime.now()
-                    ),
-                    timestamp=datetime.now()
-                )
-                filtered_results.append(placeholder_stock)
             
             user_errors = []
             # Create error entries for user stocks that don't have real analysis
@@ -229,7 +128,6 @@ async def get_dashboard(current_user: Optional[User] = Depends(get_current_user_
             
             logger.info(f"User {current_user.username} dashboard: {len(user_stocks)} tracked stocks, {len(filtered_results)} analysis results")
             
-            from ..models import SubscriptionTier
             tier_enum = SubscriptionTier.FREE
             if subscription_tier == "pro":
                 tier_enum = SubscriptionTier.PRO

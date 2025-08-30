@@ -425,3 +425,48 @@
     padding: 1rem;
   }
 }
+
+/* Loading and pending states */
+.loading-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 1rem;
+  color: #667eea;
+  font-size: 0.9rem;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.stock-card.pending {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+  border: 2px dashed rgba(102, 126, 234, 0.3);
+  opacity: 0.8;
+}
+
+.stock-card.pending .stock-header {
+  opacity: 0.7;
+}
+
+.stock-card.pending .stock-content {
+  text-align: center;
+  color: #666;
+}
+
+.analysis-note {
+  font-size: 0.8rem;
+  color: #999 !important;
+  margin-top: 0.5rem;
+}
+
+.error-item.analysis_missing {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+  border-left: 4px solid #667eea;
+}

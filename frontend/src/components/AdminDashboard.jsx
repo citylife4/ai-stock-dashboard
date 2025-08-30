@@ -4,7 +4,7 @@ import {
   RefreshCw, AlertCircle, Check, X, Edit2, Save, Database, Activity, Brain, ArrowLeft, Trash2, Plus, TrendingUp
 } from 'lucide-react'
 import { 
-  getUsers, updateUser, deleteUser, getAdminStats, getAuditLogs,
+  getUsers, updateUser, deleteUser, getAdminStats, getAuditLogs, getAnalysisLogs,
   getConfig, updateConfig, forceRefresh, adminLogout, getAdminUserStocks,
   getStockList, addStock, removeStock
 } from '../services/api'
@@ -46,6 +46,9 @@ function AdminDashboard({ onLogout }) {
 
   // Audit logs state
   const [auditLogs, setAuditLogs] = useState([])
+  
+  // Analysis logs state
+  const [analysisLogs, setAnalysisLogs] = useState(null)
 
   const subscriptionTiers = [
     { value: 'free', label: 'Free', maxStocks: 5, icon: User, color: '#6b7280' },
@@ -84,6 +87,9 @@ function AdminDashboard({ onLogout }) {
       } else if (activeTab === 'logs') {
         const logData = await getAuditLogs(50)
         setAuditLogs(logData.logs)
+      } else if (activeTab === 'analysis') {
+        const analysisData = await getAnalysisLogs(50)
+        setAnalysisLogs(analysisData.analysis_logs)
       }
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to load data')
@@ -271,6 +277,14 @@ function AdminDashboard({ onLogout }) {
             <Database size={16} />
             System Config
           </button>
+          <button 
+            onClick={() => setActiveTab('analysis')}
+            className={`nav-btn ${activeTab === 'analysis' ? 'active' : ''}`}
+          >
+            <TrendingUp size={16} />
+            Analysis Logs
+          </button>
+          
           <button 
             onClick={() => setActiveTab('logs')}
             className={`nav-btn ${activeTab === 'logs' ? 'active' : ''}`}
@@ -667,6 +681,105 @@ function AdminDashboard({ onLogout }) {
                   <RefreshCw className={loading ? 'spinning' : ''} size={16} />
                   {loading ? 'Refreshing...' : 'Refresh Stock Data'}
                 </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'analysis' && (
+            <div className="tab-content">
+              <div className="section-header">
+                <h2>Analysis Logs</h2>
+                <p>Monitor stock analysis status, errors, and system performance.</p>
+              </div>
+
+              <div className="analysis-container">
+                {loading ? (
+                  <div className="loading">
+                    <RefreshCw className="spin" size={16} />
+                    Loading analysis logs...
+                  </div>
+                ) : !analysisLogs ? (
+                  <div className="empty-state">
+                    <TrendingUp size={32} />
+                    <p>No analysis data available</p>
+                  </div>
+                ) : (
+                  <div className="analysis-status">
+                    <div className="status-cards">
+                      <div className="status-card">
+                        <div className="card-header">
+                          <Database size={20} />
+                          <h3>System Status</h3>
+                        </div>
+                        <div className="card-content">
+                          <div className="stat">
+                            <span className="label">Last Updated:</span>
+                            <span className="value">
+                              {analysisLogs.last_updated 
+                                ? formatTimestamp(analysisLogs.last_updated)
+                                : 'Never'
+                              }
+                            </span>
+                          </div>
+                          <div className="stat">
+                            <span className="label">Configured Stocks:</span>
+                            <span className="value">{analysisLogs.total_stocks_configured}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="status-card success">
+                        <div className="card-header">
+                          <Check size={20} />
+                          <h3>Successful Analyses</h3>
+                        </div>
+                        <div className="card-content">
+                          <div className="big-number">{analysisLogs.successful_analyses}</div>
+                        </div>
+                      </div>
+
+                      <div className="status-card error">
+                        <div className="card-header">
+                          <AlertCircle size={20} />
+                          <h3>Failed Analyses</h3>
+                        </div>
+                        <div className="card-content">
+                          <div className="big-number">{analysisLogs.failed_analyses}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {analysisLogs.recent_errors && analysisLogs.recent_errors.length > 0 && (
+                      <div className="errors-section">
+                        <h3>Recent Errors</h3>
+                        <div className="errors-list">
+                          {analysisLogs.recent_errors.map((error, index) => (
+                            <div key={index} className="error-item">
+                              <div className="error-symbol">{error.symbol}</div>
+                              <div className="error-message">{error.message}</div>
+                              <div className="error-type">{error.type}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {analysisLogs.analysis_results && analysisLogs.analysis_results.length > 0 && (
+                      <div className="results-section">
+                        <h3>Recent Successful Analyses</h3>
+                        <div className="results-list">
+                          {analysisLogs.analysis_results.map((result, index) => (
+                            <div key={index} className="result-item">
+                              <div className="result-symbol">{result.symbol}</div>
+                              <div className="result-score">Score: {Math.round(result.average_score)}</div>
+                              <div className="result-time">{formatTimestamp(result.last_updated)}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}

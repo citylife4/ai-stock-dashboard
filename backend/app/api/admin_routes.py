@@ -202,6 +202,43 @@ async def get_audit_logs(
         raise HTTPException(status_code=500, detail=f"Error retrieving audit logs: {str(e)}")
 
 
+@router.get("/analysis-logs")
+async def get_analysis_logs(
+    limit: int = 100,
+    current_admin: User = Depends(get_current_admin)
+):
+    """Get analysis logs and scheduler status."""
+    try:
+        scheduler_service = get_scheduler_service()
+        
+        # Get recent analysis status
+        analysis_results = scheduler_service.get_latest_analysis()
+        latest_errors = scheduler_service.get_latest_errors()
+        last_updated = scheduler_service.get_last_updated()
+        
+        # Create analysis status log
+        analysis_status = {
+            "last_updated": last_updated.isoformat() if last_updated else None,
+            "total_stocks_configured": len(config.get_stock_symbols()),
+            "successful_analyses": len(analysis_results),
+            "failed_analyses": len(latest_errors),
+            "recent_errors": latest_errors[:limit] if latest_errors else [],
+            "analysis_results": [
+                {
+                    "symbol": result.stock_data.symbol,
+                    "last_updated": result.timestamp.isoformat(),
+                    "average_score": result.ai_analysis.average_score,
+                    "status": "success"
+                }
+                for result in analysis_results[:limit]
+            ]
+        }
+        
+        return {"analysis_logs": analysis_status}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving analysis logs: {str(e)}")
+
+
 @router.get("/config", response_model=AdminConfigResponse)
 async def get_config(current_admin: User = Depends(get_current_admin)):
     """Get current data source and API key configuration."""

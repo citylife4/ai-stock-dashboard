@@ -74,11 +74,16 @@ function UserStockManager({ user, onClose }) {
     try {
       setLoading(true)
       setError(null)
+      
+      // Optimistic update - add to local state immediately
+      setUserStocks(prev => [...prev, upperSymbol])
+      setNewSymbol('')
+      
       await addUserStock(upperSymbol)
       setSuccess(`Added ${upperSymbol} to your tracking list`)
-      setNewSymbol('')
-      await loadUserStocks()
     } catch (err) {
+      // Revert optimistic update on error
+      setUserStocks(prev => prev.filter(stock => stock !== upperSymbol))
       setError(err.response?.data?.detail || `Failed to add ${upperSymbol}`)
     } finally {
       setLoading(false)
@@ -89,10 +94,16 @@ function UserStockManager({ user, onClose }) {
     try {
       setLoading(true)
       setError(null)
+      
+      // Optimistic update - remove from local state immediately
+      const previousStocks = userStocks
+      setUserStocks(prev => prev.filter(stock => stock !== symbol))
+      
       await removeUserStock(symbol)
       setSuccess(`Removed ${symbol} from your tracking list`)
-      await loadUserStocks()
     } catch (err) {
+      // Revert optimistic update on error
+      setUserStocks(previousStocks)
       setError(err.response?.data?.detail || `Failed to remove ${symbol}`)
     } finally {
       setLoading(false)

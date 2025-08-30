@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom'
 import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Clock, Settings, User, LogOut, List } from 'lucide-react'
 import './App.css'
@@ -18,6 +18,10 @@ function Dashboard() {
   const [error, setError] = useState(null)
   const [updateStatus, setUpdateStatus] = useState(null)
   const [user, setUser] = useState(null)
+  const [showStockManager, setShowStockManager] = useState(false)
+  const [lastDashboardLoad, setLastDashboardLoad] = useState(0)
+  const [isLoadingDashboard, setIsLoadingDashboard] = useState(false)
+  const previousUserRef = useRef(null)
   const navigate = useNavigate()
   const isAuthenticated = !!getAuthToken()
 
@@ -38,25 +42,64 @@ function Dashboard() {
 
   // Debug effect to watch user state changes
   useEffect(() => {
-    console.log('User state changed:', user)
+    console.log('User state changed:', user, 'Previous:', previousUserRef.current)
+    
+    // Reload dashboard when user transitions from null to logged in
+    const wasLoggedOut = previousUserRef.current === null
+    const isNowLoggedIn = user !== null
+    
+    if (wasLoggedOut && isNowLoggedIn) {
+      console.log('User logged in, reloading dashboard for authenticated user')
+      // Reset debounce timer to allow immediate reload
+      setLastDashboardLoad(0)
+      loadDashboard()
+    } else if (!wasLoggedOut && !isNowLoggedIn) {
+      console.log('User logged out, reloading dashboard for non-authenticated view')
+      setLastDashboardLoad(0)
+      loadDashboard()
+    }
+    
+    // Update ref for next comparison
+    previousUserRef.current = user
   }, [user])
 
   const handleUserLogout = () => {
     logout()
     setUser(null)
-    loadDashboard() // Reload dashboard without user context
+    // Reset debounce timer and reload dashboard for non-authenticated view
+    setLastDashboardLoad(0)
+    loadDashboard()
   }
 
   const loadDashboard = async () => {
     try {
+      // Prevent overlapping requests
+      if (isLoadingDashboard) {
+        console.log('Dashboard load skipped - already loading')
+        return
+      }
+      
+      // Prevent rapid successive calls (debounce)
+      const now = Date.now()
+      if (now - lastDashboardLoad < 5000) { // 5 second minimum between calls
+        console.log('Dashboard load debounced - last call was', (now - lastDashboardLoad), 'ms ago')
+        return
+      }
+      
+      setIsLoadingDashboard(true)
+      setLastDashboardLoad(now)
+      
+      console.log('Loading dashboard at', new Date().toISOString())
       setError(null)
       const data = await fetchDashboard()
       setDashboardData(data)
+      console.log('Dashboard loaded successfully')
     } catch (err) {
       setError('Failed to load dashboard data')
       console.error('Error loading dashboard:', err)
     } finally {
       setLoading(false)
+      setIsLoadingDashboard(false)
     }
   }
 
@@ -97,10 +140,34 @@ function Dashboard() {
 
   useEffect(() => {
     loadDashboard()
-    // Auto-refresh every 5 minutes
-    const interval = setInterval(loadDashboard, 5 * 60 * 1000)
-    return () => clearInterval(interval)
-  }, [])
+  }, []) // Only load once on mount
+
+  // Separate effect for auto-refresh with dynamic intervals
+  useEffect(() => {
+    if (!user || !dashboardData) return // Don't set up interval until we have user and initial data
+    
+    const hasPendingAnalysis = dashboardData.errors && 
+        dashboardData.errors.some(error => error.type === 'analysis_missing')
+    
+    const refreshInterval = hasPendingAnalysis ? 30 * 1000 : 5 * 60 * 1000 // 30 seconds vs 5 minutes
+    
+    console.log('Setting up auto-refresh interval:', refreshInterval / 1000, 'seconds, pending analysis:', hasPendingAnalysis)
+    
+    const interval = setInterval(() => {
+      // Only auto-refresh if user is still on the page and logged in
+      if (document.visibilityState === 'visible' && user && !isLoadingDashboard) {
+        console.log('Auto-refreshing dashboard')
+        loadDashboard()
+      } else {
+        console.log('Skipping auto-refresh - page not visible, user not logged in, or already loading')
+      }
+    }, refreshInterval)
+    
+    return () => {
+      console.log('Clearing auto-refresh interval')
+      clearInterval(interval)
+    }
+  }, [dashboardData?.errors?.length, user?.id]) // Only depend on error count and user ID
 
   // Poll for update status when refreshing
   useEffect(() => {
@@ -186,11 +253,17 @@ function Dashboard() {
             {/* Show API errors if any */}
             {dashboardData.errors && dashboardData.errors.length > 0 && (
               <div className="api-errors">
-                <h3>⚠️ API Issues Detected</h3>
+                <h3>⚠️ Stock Analysis Status</h3>
                 <div className="error-list">
                   {dashboardData.errors.map((apiError, index) => (
                     <div key={index} className={`error-item ${apiError.type}`}>
                       <strong>{apiError.symbol}:</strong> {apiError.message}
+                      {apiError.type === 'analysis_missing' && (
+                        <div className="loading-indicator">
+                          <RefreshCw className="spinning" size={16} />
+                          <span>Analyzing...</span>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -208,15 +281,15 @@ function Dashboard() {
               <div className="stat-card">
                 <TrendingUp size={20} />
                 <div>
-                  <h3>Top Score</h3>
-                  <p>{dashboardData.stocks && dashboardData.stocks.length > 0 ? Math.round(dashboardData.stocks[0].ai_analysis.average_score) : 'N/A'}</p>
+                  <h3>Analyzed</h3>
+                  <p>{dashboardData.stocks ? dashboardData.stocks.length : 0}</p>
                 </div>
               </div>
               <div className="stat-card">
                 <TrendingDown size={20} />
                 <div>
-                  <h3>Lowest Score</h3>
-                  <p>{dashboardData.stocks && dashboardData.stocks.length > 0 ? Math.round(dashboardData.stocks[dashboardData.stocks.length - 1].ai_analysis.average_score) : 'N/A'}</p>
+                  <h3>Pending</h3>
+                  <p>{dashboardData.total_stocks - (dashboardData.stocks ? dashboardData.stocks.length : 0)}</p>
                 </div>
               </div>
               <div className="stat-card subscription-card">
@@ -236,10 +309,40 @@ function Dashboard() {
                   rank={index + 1}
                 />
               ))}
+              
+              {/* Show placeholder cards for stocks being analyzed */}
+              {dashboardData.errors && dashboardData.errors
+                .filter(error => error.type === 'analysis_missing')
+                .map((error, index) => (
+                  <div key={`pending-${error.symbol}`} className="stock-card pending">
+                    <div className="stock-header">
+                      <h3>{error.symbol}</h3>
+                      <div className="loading-indicator">
+                        <RefreshCw className="spinning" size={20} />
+                      </div>
+                    </div>
+                    <div className="stock-content">
+                      <p>Analysis in progress...</p>
+                      <p className="analysis-note">This usually takes 30-60 seconds</p>
+                    </div>
+                  </div>
+                ))
+              }
             </div>
           </>
         )}
       </main>
+
+      {/* Stock Manager Modal */}
+      {showStockManager && (
+        <UserStockManager 
+          user={user}
+          onClose={() => {
+            setShowStockManager(false)
+            loadDashboard() // Reload dashboard after stock changes
+          }}
+        />
+      )}
     </div>
   )
 }

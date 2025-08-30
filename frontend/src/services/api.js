@@ -191,6 +191,15 @@ export const getAuditLogs = async (limit = 100) => {
   }
 }
 
+export const getAnalysisLogs = async (limit = 100) => {
+  try {
+    const response = await api.get(`/admin/analysis-logs?limit=${limit}`)
+    return response.data
+  } catch (error) {
+    throw handleApiError(error, 'fetching analysis logs')
+  }
+}
+
 export const getConfig = async () => {
   try {
     const response = await api.get('/admin/config')
