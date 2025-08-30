@@ -46,3 +46,13 @@ frontend/build/
 # Logs
 *.log
 logs/
+
+# Docker and Database
+admin_config.json
+mongodb_data/
+docker-data/
+
+# SSL certificates (should be managed separately)
+ssl/privkey.pem
+ssl/fullchain.pem
+ssl/cert.pem

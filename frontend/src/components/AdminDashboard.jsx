@@ -1,29 +1,35 @@
 import { useState, useEffect } from 'react'
 import { 
-  Settings, LogOut, Plus, Trash2, Save, RefreshCw, 
-  DollarSign, FileText, History, AlertCircle, Check, X, Database 
+  Settings, LogOut, User, Users, BarChart3, Crown, Shield, Zap,
+  RefreshCw, AlertCircle, Check, X, Edit2, Save, Database, Activity, Brain 
 } from 'lucide-react'
 import { 
-  getStockList, addStock, removeStock, 
-  getPrompts, updatePrompts, getAuditLogs,
-  getConfig, updateConfig, forceRefresh,
-  adminLogout 
+  getUsers, updateUser, getAdminStats, getAuditLogs,
+  getConfig, updateConfig, forceRefresh, adminLogout, getAdminUserStocks
 } from '../services/api'
+import AIConfiguration from './AIConfiguration'
 import './AdminDashboard.css'
 
 function AdminDashboard({ onLogout }) {
-  const [activeTab, setActiveTab] = useState('stocks')
+  const [activeTab, setActiveTab] = useState('users')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
 
-  // Stock management state
-  const [stocks, setStocks] = useState([])
-  const [newStock, setNewStock] = useState('')
+  // User management state
+  const [users, setUsers] = useState([])
+  const [editingUser, setEditingUser] = useState(null)
+  const [editData, setEditData] = useState({})
 
-  // Prompt management state
-  const [aiPrompt, setAiPrompt] = useState('')
-  const [originalPrompt, setOriginalPrompt] = useState('')
+  // Statistics state
+  const [stats, setStats] = useState({
+    total_users: 0,
+    active_users: 0,
+    subscription_tiers: { free: 0, pro: 0, expert: 0 },
+    total_stocks_tracked: 0,
+    unique_symbols_tracked: 0,
+    symbols: []
+  })
 
   // Configuration state
   const [dataSource, setDataSource] = useState('yahoo')
@@ -31,18 +37,20 @@ function AdminDashboard({ onLogout }) {
   const [polygonApiKey, setPolygonApiKey] = useState('')
   const [aiProvider, setAiProvider] = useState('openai')
   const [aiModel, setAiModel] = useState('gpt-3.5-turbo')
-  const [customModel, setCustomModel] = useState('')
-  const [useCustomModel, setUseCustomModel] = useState(false)
   const [originalDataSource, setOriginalDataSource] = useState('yahoo')
   const [originalApiKey, setOriginalApiKey] = useState('')
   const [originalPolygonApiKey, setOriginalPolygonApiKey] = useState('')
   const [originalAiProvider, setOriginalAiProvider] = useState('openai')
   const [originalAiModel, setOriginalAiModel] = useState('gpt-3.5-turbo')
-  const [originalCustomModel, setOriginalCustomModel] = useState('')
-  const [originalUseCustomModel, setOriginalUseCustomModel] = useState(false)
 
   // Audit logs state
   const [auditLogs, setAuditLogs] = useState([])
+
+  const subscriptionTiers = [
+    { value: 'free', label: 'Free', maxStocks: 5, icon: User, color: '#6b7280' },
+    { value: 'pro', label: 'Pro', maxStocks: 10, icon: Crown, color: '#3b82f6' },
+    { value: 'expert', label: 'Expert', maxStocks: 20, icon: Shield, color: '#8b5cf6' }
+  ]
 
   useEffect(() => {
     loadData()
@@ -53,13 +61,12 @@ function AdminDashboard({ onLogout }) {
     setError(null)
     
     try {
-      if (activeTab === 'stocks') {
-        const stockData = await getStockList()
-        setStocks(stockData.symbols)
-      } else if (activeTab === 'prompts') {
-        const promptData = await getPrompts()
-        setAiPrompt(promptData.ai_analysis_prompt)
-        setOriginalPrompt(promptData.ai_analysis_prompt)
+      if (activeTab === 'users') {
+        const userData = await getUsers()
+        setUsers(userData)
+      } else if (activeTab === 'stats') {
+        const statsData = await getAdminStats()
+        setStats(statsData)
       } else if (activeTab === 'config') {
         const configData = await getConfig()
         setDataSource(configData.data_source)
@@ -68,22 +75,11 @@ function AdminDashboard({ onLogout }) {
         setAiProvider(configData.ai_provider)
         setAiModel(configData.ai_model)
         
-        // Check if current model is a custom model (not in predefined lists)
-        const predefinedModels = [
-          'gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo-preview',
-          'llama3-70b-8192', 'mixtral-8x7b-32768', 'gemma-7b-it'
-        ]
-        const isCustom = !predefinedModels.includes(configData.ai_model)
-        setUseCustomModel(isCustom)
-        setCustomModel(isCustom ? configData.ai_model : '')
-        
         setOriginalDataSource(configData.data_source)
         setOriginalApiKey(configData.alpha_vantage_api_key)
         setOriginalPolygonApiKey(configData.polygon_api_key)
         setOriginalAiProvider(configData.ai_provider)
         setOriginalAiModel(configData.ai_model)
-        setOriginalUseCustomModel(isCustom)
-        setOriginalCustomModel(isCustom ? configData.ai_model : '')
       } else if (activeTab === 'logs') {
         const logData = await getAuditLogs(50)
         setAuditLogs(logData.logs)
@@ -95,55 +91,27 @@ function AdminDashboard({ onLogout }) {
     }
   }
 
-  const handleAddStock = async (e) => {
-    e.preventDefault()
-    if (!newStock.trim()) return
-
-    setLoading(true)
-    setError(null)
-    setSuccess(null)
-
-    try {
-      await addStock(newStock.trim().toUpperCase())
-      setSuccess(`Successfully added ${newStock.toUpperCase()}`)
-      setNewStock('')
-      await loadData()
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to add stock')
-    } finally {
-      setLoading(false)
-    }
+  const handleEditUser = (user) => {
+    setEditingUser(user.id)
+    setEditData({
+      subscription_tier: user.subscription_tier,
+      max_stocks: user.max_stocks,
+      is_active: user.is_active
+    })
   }
 
-  const handleRemoveStock = async (symbol) => {
-    if (!confirm(`Are you sure you want to remove ${symbol}?`)) return
-
+  const handleSaveUser = async (userId) => {
     setLoading(true)
     setError(null)
     setSuccess(null)
 
     try {
-      await removeStock(symbol)
-      setSuccess(`Successfully removed ${symbol}`)
+      await updateUser(userId, editData)
+      setSuccess('User updated successfully')
+      setEditingUser(null)
       await loadData()
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to remove stock')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleUpdatePrompt = async () => {
-    setLoading(true)
-    setError(null)
-    setSuccess(null)
-
-    try {
-      await updatePrompts(aiPrompt)
-      setSuccess('Successfully updated AI analysis prompt')
-      setOriginalPrompt(aiPrompt)
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to update prompt')
+      setError(err.response?.data?.detail || 'Failed to update user')
     } finally {
       setLoading(false)
     }
@@ -174,11 +142,7 @@ function AdminDashboard({ onLogout }) {
       }
 
       if (aiModel !== originalAiModel) {
-        configUpdate.ai_model = useCustomModel ? customModel : aiModel
-      }
-
-      if (useCustomModel !== originalUseCustomModel || customModel !== originalCustomModel) {
-        configUpdate.ai_model = useCustomModel ? customModel : aiModel
+        configUpdate.ai_model = aiModel
       }
 
       if (Object.keys(configUpdate).length === 0) {
@@ -193,9 +157,7 @@ function AdminDashboard({ onLogout }) {
       setOriginalApiKey(apiKey)
       setOriginalPolygonApiKey(polygonApiKey)
       setOriginalAiProvider(aiProvider)
-      setOriginalAiModel(useCustomModel ? customModel : aiModel)
-      setOriginalUseCustomModel(useCustomModel)
-      setOriginalCustomModel(customModel)
+      setOriginalAiModel(aiModel)
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to update configuration')
     } finally {
@@ -232,14 +194,15 @@ function AdminDashboard({ onLogout }) {
     return new Date(timestamp).toLocaleString()
   }
 
-  const hasUnsavedPromptChanges = aiPrompt !== originalPrompt
+  const getTierInfo = (tier) => {
+    return subscriptionTiers.find(t => t.value === tier) || subscriptionTiers[0]
+  }
+
   const hasUnsavedConfigChanges = dataSource !== originalDataSource || 
     apiKey !== originalApiKey || 
     polygonApiKey !== originalPolygonApiKey ||
     aiProvider !== originalAiProvider ||
-    aiModel !== originalAiModel ||
-    useCustomModel !== originalUseCustomModel ||
-    customModel !== originalCustomModel
+    aiModel !== originalAiModel
 
   return (
     <div className="admin-dashboard">
@@ -259,31 +222,38 @@ function AdminDashboard({ onLogout }) {
       <div className="admin-content">
         <nav className="admin-nav">
           <button 
-            onClick={() => setActiveTab('stocks')}
-            className={`nav-btn ${activeTab === 'stocks' ? 'active' : ''}`}
+            onClick={() => setActiveTab('users')}
+            className={`nav-btn ${activeTab === 'users' ? 'active' : ''}`}
           >
-            <DollarSign size={16} />
-            Stock Management
+            <Users size={16} />
+            User Management
           </button>
           <button 
-            onClick={() => setActiveTab('prompts')}
-            className={`nav-btn ${activeTab === 'prompts' ? 'active' : ''}`}
+            onClick={() => setActiveTab('stats')}
+            className={`nav-btn ${activeTab === 'stats' ? 'active' : ''}`}
           >
-            <FileText size={16} />
-            Prompt Management
+            <BarChart3 size={16} />
+            Statistics
+          </button>
+          <button 
+            onClick={() => setActiveTab('ai')}
+            className={`nav-btn ${activeTab === 'ai' ? 'active' : ''}`}
+          >
+            <Brain size={16} />
+            AI Configuration
           </button>
           <button 
             onClick={() => setActiveTab('config')}
             className={`nav-btn ${activeTab === 'config' ? 'active' : ''}`}
           >
             <Database size={16} />
-            Data Configuration
+            System Config
           </button>
           <button 
             onClick={() => setActiveTab('logs')}
             className={`nav-btn ${activeTab === 'logs' ? 'active' : ''}`}
           >
-            <History size={16} />
+            <Activity size={16} />
             Audit Logs
           </button>
         </nav>
@@ -299,116 +269,228 @@ function AdminDashboard({ onLogout }) {
             </div>
           )}
 
-          {activeTab === 'stocks' && (
+          {activeTab === 'users' && (
             <div className="tab-content">
               <div className="section-header">
-                <h2>Stock Management</h2>
-                <p>Add or remove stocks from the tracking list. Changes take effect immediately.</p>
+                <h2>User Management</h2>
+                <p>Manage user accounts, subscription tiers, and stock limits.</p>
               </div>
 
-              <div className="add-stock-form">
-                <form onSubmit={handleAddStock}>
-                  <div className="form-row">
-                    <input
-                      type="text"
-                      value={newStock}
-                      onChange={(e) => setNewStock(e.target.value.toUpperCase())}
-                      placeholder="Enter stock symbol (e.g., AAPL)"
-                      disabled={loading}
-                      maxLength={10}
-                    />
-                    <button type="submit" disabled={loading || !newStock.trim()}>
-                      <Plus size={16} />
-                      Add Stock
-                    </button>
-                  </div>
-                </form>
-              </div>
-
-              <div className="stocks-list">
-                <h3>Currently Tracked Stocks ({stocks.length})</h3>
+              <div className="users-container">
                 {loading ? (
                   <div className="loading">
                     <RefreshCw className="spin" size={16} />
-                    Loading...
+                    Loading users...
+                  </div>
+                ) : users.length === 0 ? (
+                  <div className="empty-state">
+                    <Users size={32} />
+                    <p>No users registered yet</p>
                   </div>
                 ) : (
-                  <div className="stocks-grid">
-                    {stocks.map(symbol => (
-                      <div key={symbol} className="stock-item">
-                        <span className="stock-symbol">{symbol}</span>
-                        <button
-                          onClick={() => handleRemoveStock(symbol)}
-                          className="remove-btn"
-                          disabled={loading || stocks.length <= 1}
-                          title={stocks.length <= 1 ? "Cannot remove all stocks" : "Remove stock"}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    ))}
+                  <div className="users-table">
+                    <div className="table-header">
+                      <div>User</div>
+                      <div>Subscription</div>
+                      <div>Stocks</div>
+                      <div>Status</div>
+                      <div>Actions</div>
+                    </div>
+                    {users.map(user => {
+                      const tierInfo = getTierInfo(user.subscription_tier)
+                      const TierIcon = tierInfo.icon
+                      
+                      return (
+                        <div key={user.id} className="table-row">
+                          <div className="user-info">
+                            <div className="user-details">
+                              <span className="username">{user.username}</span>
+                              <span className="email">{user.email}</span>
+                            </div>
+                          </div>
+                          
+                          <div className="subscription-info">
+                            {editingUser === user.id ? (
+                              <select
+                                value={editData.subscription_tier}
+                                onChange={(e) => {
+                                  const newTier = e.target.value
+                                  const tierInfo = getTierInfo(newTier)
+                                  setEditData({
+                                    ...editData,
+                                    subscription_tier: newTier,
+                                    max_stocks: tierInfo.maxStocks
+                                  })
+                                }}
+                              >
+                                {subscriptionTiers.map(tier => (
+                                  <option key={tier.value} value={tier.value}>
+                                    {tier.label}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <div className="tier-badge" style={{ backgroundColor: tierInfo.color }}>
+                                <TierIcon size={14} />
+                                {tierInfo.label}
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="stocks-info">
+                            {editingUser === user.id ? (
+                              <input
+                                type="number"
+                                value={editData.max_stocks}
+                                onChange={(e) => setEditData({
+                                  ...editData,
+                                  max_stocks: parseInt(e.target.value)
+                                })}
+                                min="1"
+                                max="50"
+                              />
+                            ) : (
+                              <span>{user.stock_count}/{user.max_stocks}</span>
+                            )}
+                          </div>
+                          
+                          <div className="status-info">
+                            {editingUser === user.id ? (
+                              <label className="status-toggle">
+                                <input
+                                  type="checkbox"
+                                  checked={editData.is_active}
+                                  onChange={(e) => setEditData({
+                                    ...editData,
+                                    is_active: e.target.checked
+                                  })}
+                                />
+                                Active
+                              </label>
+                            ) : (
+                              <span className={`status ${user.is_active ? 'active' : 'inactive'}`}>
+                                {user.is_active ? 'Active' : 'Inactive'}
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="actions">
+                            {editingUser === user.id ? (
+                              <>
+                                <button
+                                  onClick={() => handleSaveUser(user.id)}
+                                  className="save-btn"
+                                  disabled={loading}
+                                >
+                                  <Save size={14} />
+                                </button>
+                                <button
+                                  onClick={() => setEditingUser(null)}
+                                  className="cancel-btn"
+                                  disabled={loading}
+                                >
+                                  <X size={14} />
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                onClick={() => handleEditUser(user)}
+                                className="edit-btn"
+                                disabled={loading}
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
             </div>
           )}
 
-          {activeTab === 'prompts' && (
+          {activeTab === 'stats' && (
             <div className="tab-content">
               <div className="section-header">
-                <h2>Prompt Management</h2>
-                <p>Customize the AI analysis prompt. Changes take effect immediately on the next analysis.</p>
+                <h2>System Statistics</h2>
+                <p>Overview of platform usage and user distribution.</p>
               </div>
 
-              <div className="prompt-editor">
-                <label htmlFor="ai-prompt">AI Analysis Prompt</label>
-                <textarea
-                  id="ai-prompt"
-                  value={aiPrompt}
-                  onChange={(e) => setAiPrompt(e.target.value)}
-                  disabled={loading}
-                  rows={15}
-                  placeholder="Enter your AI analysis prompt..."
-                />
-                <div className="prompt-help">
-                  <p><strong>Required placeholders:</strong></p>
-                  <div className="placeholders">
-                    <code>{'{symbol}'}</code>
-                    <code>{'{current_price}'}</code>
-                    <code>{'{previous_close}'}</code>
-                    <code>{'{change_percent}'}</code>
-                    <code>{'{volume}'}</code>
-                    <code>{'{market_cap}'}</code>
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <div className="stat-icon">
+                    <Users size={24} />
+                  </div>
+                  <div className="stat-content">
+                    <h3>Total Users</h3>
+                    <div className="stat-value">{stats.total_users}</div>
+                    <div className="stat-subtext">{stats.active_users} active</div>
                   </div>
                 </div>
-                <div className="prompt-actions">
-                  <button
-                    onClick={handleUpdatePrompt}
-                    disabled={loading || !hasUnsavedPromptChanges}
-                    className="save-btn"
-                  >
-                    <Save size={16} />
-                    {loading ? 'Saving...' : 'Save Changes'}
-                  </button>
-                  {hasUnsavedPromptChanges && (
-                    <button
-                      onClick={() => setAiPrompt(originalPrompt)}
-                      className="revert-btn"
-                      disabled={loading}
-                    >
-                      Revert Changes
-                    </button>
-                  )}
+
+                <div className="stat-card">
+                  <div className="stat-icon">
+                    <BarChart3 size={24} />
+                  </div>
+                  <div className="stat-content">
+                    <h3>Stocks Tracked</h3>
+                    <div className="stat-value">{stats.total_stocks_tracked}</div>
+                    <div className="stat-subtext">{stats.unique_symbols_tracked} unique symbols</div>
+                  </div>
+                </div>
+
+                <div className="stat-card tier-distribution">
+                  <div className="stat-content">
+                    <h3>Subscription Distribution</h3>
+                    <div className="tier-stats">
+                      {subscriptionTiers.map(tier => {
+                        const TierIcon = tier.icon
+                        const count = stats.subscription_tiers[tier.value] || 0
+                        const percentage = stats.total_users > 0 ? Math.round((count / stats.total_users) * 100) : 0
+                        
+                        return (
+                          <div key={tier.value} className="tier-stat">
+                            <div className="tier-stat-header">
+                              <TierIcon size={16} style={{ color: tier.color }} />
+                              <span>{tier.label}</span>
+                            </div>
+                            <div className="tier-stat-value">
+                              {count} users ({percentage}%)
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
+
+              {stats.symbols.length > 0 && (
+                <div className="tracked-symbols">
+                  <h3>Currently Tracked Symbols</h3>
+                  <div className="symbols-grid">
+                    {stats.symbols.map(symbol => (
+                      <span key={symbol} className="symbol-badge">{symbol}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'ai' && (
+            <div className="tab-content">
+              <AIConfiguration />
             </div>
           )}
 
           {activeTab === 'config' && (
             <div className="tab-content">
               <div className="section-header">
-                <h2>Data Configuration</h2>
-                <p>Configure data source and API settings. Changes take effect immediately.</p>
+                <h2>System Configuration</h2>
+                <p>Configure data source and AI settings for the platform.</p>
               </div>
 
               <div className="config-section">
@@ -489,67 +571,28 @@ function AdminDashboard({ onLogout }) {
 
                 <div className="form-group">
                   <label htmlFor="ai-model">AI Model</label>
-                  <div className="model-selection">
-                    <div className="model-toggle">
-                      <label className="toggle-label">
-                        <input
-                          type="checkbox"
-                          checked={useCustomModel}
-                          onChange={(e) => {
-                            setUseCustomModel(e.target.checked)
-                            if (!e.target.checked) {
-                              // Reset to default model when switching back to dropdown
-                              if (aiProvider === 'openai') {
-                                setAiModel('gpt-3.5-turbo')
-                              } else {
-                                setAiModel('llama3-70b-8192')
-                              }
-                            }
-                          }}
-                          disabled={loading}
-                        />
-                        Use custom model
-                      </label>
-                    </div>
-                    
-                    {useCustomModel ? (
-                      <input
-                        type="text"
-                        id="custom-model"
-                        value={customModel}
-                        onChange={(e) => setCustomModel(e.target.value)}
-                        placeholder="Enter custom model name (e.g., gpt-4o, claude-3-sonnet, etc.)"
-                        disabled={loading}
-                        className="custom-model-input"
-                      />
+                  <select
+                    id="ai-model"
+                    value={aiModel}
+                    onChange={(e) => setAiModel(e.target.value)}
+                    disabled={loading}
+                  >
+                    {aiProvider === 'openai' ? (
+                      <>
+                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                        <option value="gpt-4">GPT-4</option>
+                        <option value="gpt-4-turbo-preview">GPT-4 Turbo</option>
+                      </>
                     ) : (
-                      <select
-                        id="ai-model"
-                        value={aiModel}
-                        onChange={(e) => setAiModel(e.target.value)}
-                        disabled={loading}
-                      >
-                        {aiProvider === 'openai' ? (
-                          <>
-                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                            <option value="gpt-4">GPT-4</option>
-                            <option value="gpt-4-turbo-preview">GPT-4 Turbo</option>
-                          </>
-                        ) : (
-                          <>
-                            <option value="llama3-70b-8192">Llama 3 70B</option>
-                            <option value="mixtral-8x7b-32768">Mixtral 8x7B</option>
-                            <option value="gemma-7b-it">Gemma 7B</option>
-                          </>
-                        )}
-                      </select>
+                      <>
+                        <option value="llama3-70b-8192">Llama 3 70B</option>
+                        <option value="mixtral-8x7b-32768">Mixtral 8x7B</option>
+                        <option value="gemma-7b-it">Gemma 7B</option>
+                      </>
                     )}
-                  </div>
+                  </select>
                   <p className="help-text">
-                    {useCustomModel 
-                      ? 'Enter the exact model name as required by your AI provider. Make sure the model is available for your API key.'
-                      : 'Select the specific model to use with the chosen AI provider.'
-                    }
+                    Select the specific model to use with the chosen AI provider.
                   </p>
                 </div>
 
@@ -570,8 +613,6 @@ function AdminDashboard({ onLogout }) {
                         setPolygonApiKey(originalPolygonApiKey)
                         setAiProvider(originalAiProvider)
                         setAiModel(originalAiModel)
-                        setUseCustomModel(originalUseCustomModel)
-                        setCustomModel(originalCustomModel)
                       }}
                       className="revert-btn"
                       disabled={loading}
@@ -585,7 +626,7 @@ function AdminDashboard({ onLogout }) {
               <div className="refresh-section">
                 <div className="section-header">
                   <h3>Manual Refresh</h3>
-                  <p>Force an immediate update of stock data using the current configuration.</p>
+                  <p>Force an immediate update of stock data for all users.</p>
                 </div>
                 <button
                   onClick={handleForceRefresh}
@@ -614,7 +655,7 @@ function AdminDashboard({ onLogout }) {
                   </div>
                 ) : auditLogs.length === 0 ? (
                   <div className="empty-state">
-                    <History size={32} />
+                    <Activity size={32} />
                     <p>No audit logs found</p>
                   </div>
                 ) : (

@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom'
-import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Clock, Settings } from 'lucide-react'
+import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Clock, Settings, User, LogOut, List } from 'lucide-react'
 import './App.css'
 import StockCard from './components/StockCard'
-import AdminLogin from './components/AdminLogin'
 import AdminDashboard from './components/AdminDashboard'
-import { fetchDashboard, refreshDashboard, getStatus, adminLogin, initializeAuth, getAuthToken } from './services/api'
+import UserAuth from './components/UserAuth'
+import UserStockManager from './components/UserStockManager'
+import Welcome from './components/Welcome'
+import Header from './components/Header'
+
+import { fetchDashboard, refreshDashboard, getStatus, initializeAuth, getAuthToken, initializeUserAuth, getCurrentUser, logout } from './services/api'
 
 function Dashboard() {
   const [dashboardData, setDashboardData] = useState(null)
@@ -13,8 +17,35 @@ function Dashboard() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
   const [updateStatus, setUpdateStatus] = useState(null)
+  const [user, setUser] = useState(null)
   const navigate = useNavigate()
   const isAuthenticated = !!getAuthToken()
+
+  useEffect(() => {
+    // Check for existing user session
+    initializeUserAuth()
+    const userData = getCurrentUser()
+    console.log('Initial user data from localStorage:', userData)
+    if (userData) {
+      setUser(userData)
+    }
+  }, [])
+
+  const handleUserLogin = (userData) => {
+    console.log('User login data:', userData)
+    setUser(userData)
+  }
+
+  // Debug effect to watch user state changes
+  useEffect(() => {
+    console.log('User state changed:', user)
+  }, [user])
+
+  const handleUserLogout = () => {
+    logout()
+    setUser(null)
+    loadDashboard() // Reload dashboard without user context
+  }
 
   const loadDashboard = async () => {
     try {
@@ -79,10 +110,6 @@ function Dashboard() {
     }
   }, [refreshing, updateStatus?.update_in_progress])
 
-  const formatLastUpdated = (timestamp) => {
-    return new Date(timestamp).toLocaleString()
-  }
-
   if (loading) {
     return (
       <div className="app">
@@ -94,45 +121,39 @@ function Dashboard() {
     )
   }
 
+  // Show welcome page for unauthenticated users
+  if (!user) {
+    return (
+      <div className="app">
+        <Header 
+          user={user}
+          onLogin={handleUserLogin}
+          onLogout={handleUserLogout}
+          dashboardData={dashboardData}
+          onRefresh={handleRefresh}
+          refreshing={refreshing}
+          updateStatus={updateStatus}
+        />
+        <Welcome 
+          dashboardData={dashboardData} 
+          onShowAuth={() => {/* Auth handled by Header */}} 
+        />
+      </div>
+    )
+  }
+
+  // Show authenticated dashboard
   return (
     <div className="app">
-      <header className="app-header">
-        <div className="header-content">
-          <h1>
-            <TrendingUp className="header-icon" />
-            AI Stock Dashboard
-          </h1>
-          <div className="header-actions">
-            <div className="last-updated">
-              <Clock size={16} />
-              <span>Updated: {dashboardData?.last_updated ? formatLastUpdated(dashboardData.last_updated) : 'Never'}</span>
-            </div>
-            <button 
-              onClick={handleRefresh}
-              disabled={refreshing || updateStatus?.update_in_progress}
-              className={`refresh-btn ${(refreshing || updateStatus?.update_in_progress) ? 'refreshing' : ''}`}
-              title="Refresh stock data"
-            >
-              <RefreshCw size={16} className={refreshing || updateStatus?.update_in_progress ? 'spinning' : ''} />
-              {refreshing || updateStatus?.update_in_progress ? 'Updating...' : 'Refresh'}
-            </button>
-            {isAuthenticated ? (
-              <button 
-                onClick={() => navigate('/admin')}
-                className="admin-btn"
-              >
-                <Settings size={16} />
-                Admin
-              </button>
-            ) : (
-              <Link to="/admin/login" className="admin-link">
-                <Settings size={16} />
-                Admin
-              </Link>
-            )}
-          </div>
-        </div>
-      </header>
+      <Header 
+        user={user}
+        onLogin={handleUserLogin}
+        onLogout={handleUserLogout}
+        dashboardData={dashboardData}
+        onRefresh={handleRefresh}
+        refreshing={refreshing}
+        updateStatus={updateStatus}
+      />
 
       <main className="main-content">
         {error && (
@@ -142,7 +163,25 @@ function Dashboard() {
           </div>
         )}
 
-        {dashboardData && (
+        {/* Show empty state if user has no stocks */}
+        {dashboardData && dashboardData.total_stocks === 0 && !error && (
+          <div className="empty-dashboard">
+            <div className="empty-state">
+              <TrendingUp size={64} className="empty-icon" />
+              <h2>Start Your Investment Journey</h2>
+              <p>You haven't added any stocks to track yet. Add some stocks to see AI-powered analysis and insights.</p>
+              <button 
+                onClick={() => setShowStockManager(true)}
+                className="add-stocks-btn"
+              >
+                <List size={16} />
+                Add Your First Stock
+              </button>
+            </div>
+          </div>
+        )}
+
+        {dashboardData && dashboardData.total_stocks > 0 && (
           <>
             {/* Show API errors if any */}
             {dashboardData.errors && dashboardData.errors.length > 0 && (
@@ -170,14 +209,21 @@ function Dashboard() {
                 <TrendingUp size={20} />
                 <div>
                   <h3>Top Score</h3>
-                  <p>{dashboardData.stocks && dashboardData.stocks.length > 0 ? dashboardData.stocks[0].ai_analysis.score : 'N/A'}</p>
+                  <p>{dashboardData.stocks && dashboardData.stocks.length > 0 ? Math.round(dashboardData.stocks[0].ai_analysis.average_score) : 'N/A'}</p>
                 </div>
               </div>
               <div className="stat-card">
                 <TrendingDown size={20} />
                 <div>
                   <h3>Lowest Score</h3>
-                  <p>{dashboardData.stocks && dashboardData.stocks.length > 0 ? dashboardData.stocks[dashboardData.stocks.length - 1].ai_analysis.score : 'N/A'}</p>
+                  <p>{dashboardData.stocks && dashboardData.stocks.length > 0 ? Math.round(dashboardData.stocks[dashboardData.stocks.length - 1].ai_analysis.average_score) : 'N/A'}</p>
+                </div>
+              </div>
+              <div className="stat-card subscription-card">
+                <User size={20} />
+                <div>
+                  <h3>Plan</h3>
+                  <p>{user.subscription_tier.toUpperCase()}</p>
                 </div>
               </div>
             </div>
@@ -198,36 +244,59 @@ function Dashboard() {
   )
 }
 
-function AdminLoginPage() {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const navigate = useNavigate()
-
-  const handleLogin = async (username, password) => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      await adminLogin(username, password)
-      navigate('/admin')
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return <AdminLogin onLogin={handleLogin} error={error} loading={loading} />
-}
-
 function AdminPage() {
   const navigate = useNavigate()
+  const [user, setUser] = useState(null)
+
+  // Check if user is logged in and is admin
+  useEffect(() => {
+    const checkAdminAccess = async () => {
+      try {
+        const currentUser = await getCurrentUser()
+        if (!currentUser || !currentUser.is_admin) {
+          // Not an admin, redirect to home
+          navigate('/')
+          return
+        }
+        setUser(currentUser)
+      } catch (error) {
+        // Not logged in or invalid token, redirect to home
+        navigate('/')
+      }
+    }
+
+    checkAdminAccess()
+  }, [navigate])
 
   const handleLogout = () => {
+    logout()
     navigate('/')
   }
 
-  return <AdminDashboard onLogout={handleLogout} />
+  // Show loading while checking admin access
+  if (!user) {
+    return (
+      <div className="app">
+        <Header 
+          user={null}
+          onLogin={() => {}}
+          onLogout={handleLogout}
+        />
+        <div>Loading...</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="app">
+      <Header 
+        user={user}
+        onLogin={() => {}}
+        onLogout={handleLogout}
+      />
+      <AdminDashboard onLogout={handleLogout} />
+    </div>
+  )
 }
 
 function App() {
@@ -240,7 +309,6 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route path="/admin" element={<AdminPage />} />
       </Routes>
     </Router>

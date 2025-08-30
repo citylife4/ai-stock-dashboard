@@ -63,14 +63,24 @@ class SchedulerService:
                 logger.error(error_msg)
                 return None
                 
-            # Analyze stock
+
+            # Analyze stock with AI
             ai_analysis = self.ai_service.analyze_stock(stock_data)
-            stock_analysis = StockAnalysis(
-                stock_data=stock_data,
-                ai_analysis=ai_analysis,
+            
+            # Convert single AI analysis to multi-AI format for compatibility
+            from ..models import MultiAIAnalysis
+            multi_ai_analysis = MultiAIAnalysis(
+                analyses=[ai_analysis],
+                average_score=float(ai_analysis.score),
                 timestamp=datetime.now()
             )
-            logger.info(f"Analyzed {stock_data.symbol}: Score {ai_analysis.score}")
+            
+            stock_analysis = StockAnalysis(
+                stock_data=stock_data,
+                ai_analysis=multi_ai_analysis,
+                timestamp=datetime.now()
+            )
+            logger.info(f"Analyzed {stock_data.symbol}: Score {multi_ai_analysis.average_score}")
             return stock_analysis
             
         except StockDataException as e:
@@ -85,6 +95,12 @@ class SchedulerService:
             logger.error(f"Unexpected error analyzing {symbol}: {e}")
             return None
     
+
+    def is_update_in_progress(self) -> bool:
+        """Check if stock analysis update is currently in progress."""
+        return self.is_updating
+    
+
     def update_stock_analysis(self):
         """Update stock analysis for all configured symbols - non-blocking."""
         if self.is_updating:
@@ -96,44 +112,41 @@ class SchedulerService:
         thread.start()
     
     def _update_stock_analysis_async(self):
-        """Internal method that runs the actual analysis asynchronously."""
-        logger.info("Starting stock analysis update...")
-        self.is_updating = True
-        
+
+        """Update stock analysis for all configured symbols - internal async method."""
         try:
+            self.is_updating = True
+            logger.info("Starting stock analysis update...")
+            
+
             # Clear previous errors
             self.latest_errors = []
             
             # Get current stock symbols from dynamic config
             stock_symbols = config.get_stock_symbols()
             
-            # Use ThreadPoolExecutor for parallel processing
+
+            # Use ThreadPoolExecutor to analyze stocks in parallel
             analysis_results = []
-            error_count = 0
             
-            # Submit all stock analysis tasks to thread pool
+            # Submit all stock analysis tasks to the thread pool
+
             future_to_symbol = {
                 self.executor.submit(self.analyze_single_stock, symbol): symbol 
                 for symbol in stock_symbols
             }
             
             # Collect results as they complete
-            for future in future_to_symbol:
+            from concurrent.futures import as_completed
+            for future in as_completed(future_to_symbol):
                 symbol = future_to_symbol[future]
                 try:
-                    result = future.result(timeout=30)  # 30 second timeout per stock
+                    result = future.result()
                     if result:
                         analysis_results.append(result)
-                    else:
-                        error_count += 1
-                        self.latest_errors.append({
-                            "type": "stock_data",
-                            "symbol": symbol,
-                            "message": f"Failed to analyze {symbol}"
-                        })
-                except Exception as e:
-                    error_count += 1
-                    error_msg = f"Error analyzing {symbol}: {str(e)}"
+                except Exception as exc:
+                    error_msg = f"Stock analysis generated an exception for {symbol}: {exc}"
+
                     self.latest_errors.append({
                         "type": "general",
                         "symbol": symbol,
@@ -141,8 +154,8 @@ class SchedulerService:
                     })
                     logger.error(error_msg)
             
-            # Sort by AI score (highest first)
-            analysis_results.sort(key=lambda x: x.ai_analysis.score, reverse=True)
+            # Sort by AI average score (highest first)
+            analysis_results.sort(key=lambda x: x.ai_analysis.average_score, reverse=True)
             
             # Update stored results atomically
             self.latest_analysis = analysis_results

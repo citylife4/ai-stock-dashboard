@@ -1,13 +1,14 @@
+# Development Docker Compose with volume mounts for easy code updates
 services:
   mongodb:
     image: mongo:7.0
-    container_name: ai-stock-dashboard-mongodb
+    container_name: ai-stock-dashboard-mongodb-dev
     environment:
       - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME:-admin}
       - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:-password123}
       - MONGO_INITDB_DATABASE=${DATABASE_NAME:-ai_stock_dashboard}
     volumes:
-      - mongodb_data:/data/db
+      - mongodb_data_dev:/data/db
       - ./docker-init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
     networks:
       - ai-stock-network
@@ -22,32 +23,32 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
-    container_name: ai-stock-dashboard-backend
-    # No ports exposed - internal communication only
+      dockerfile: Dockerfile.dev
+    container_name: ai-stock-dashboard-backend-dev
+    ports:
+      - "8000:8000"  # Expose for development
+    volumes:
+      - ./backend/app:/app/app:ro  # Mount source code for hot reload
+      - ./backend/requirements.txt:/app/requirements.txt:ro
     environment:
       - HOST=0.0.0.0
       - PORT=8000
-      - DEBUG=false
+      - DEBUG=true
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
-      - ALPHA_VANTAGE_API_KEY=${ALPHA_VANTAGE_API_KEY:-}
       - POLYGON_API_KEY=${POLYGON_API_KEY:-}
+      - ALPHA_VANTAGE_API_KEY=${ALPHA_VANTAGE_API_KEY:-}
       - MONGODB_URL=${MONGODB_URL:-mongodb://admin:password123@mongodb:27017}
       - DATABASE_NAME=${DATABASE_NAME:-ai_stock_dashboard}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-jwt-secret-key-change-in-production}
       - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
-    volumes:
-      - ./backend:/app
-      - /app/__pycache__
     networks:
       - ai-stock-network
     restart: unless-stopped
     depends_on:
-      mongodb:
-        condition: service_healthy
+      - mongodb
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -58,25 +59,24 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
-    container_name: ai-stock-dashboard-frontend
+      dockerfile: Dockerfile.dev
+    container_name: ai-stock-dashboard-frontend-dev
     ports:
-      - "34197:80"
+      - "3000:3000"   # Vite dev server
+    volumes:
+      - ./frontend/src:/app/src:ro  # Mount source code for hot reload
+      - ./frontend/package.json:/app/package.json:ro
+      - ./frontend/vite.config.js:/app/vite.config.js:ro
     depends_on:
-      backend:
-        condition: service_healthy
+      - backend
     networks:
       - ai-stock-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+    environment:
+      - VITE_API_URL=http://localhost:8000
 
 volumes:
-  mongodb_data:
+  mongodb_data_dev:
 
 networks:
   ai-stock-network:

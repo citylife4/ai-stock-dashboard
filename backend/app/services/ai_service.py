@@ -2,7 +2,7 @@ import json
 import random
 from typing import Optional
 import openai
-from ..models import StockData, AIAnalysis
+from ..models import StockData, AIAnalysis, AIModelType
 from ..config import config
 from ..exceptions import OpenAIException, GroqException
 import logging
@@ -107,7 +107,11 @@ class AIService:
                 score = 50
                 reason = analysis_text[:200] if analysis_text else "AI analysis completed"
             
-            return AIAnalysis(score=score, reason=reason)
+            return AIAnalysis(
+                ai_model=AIModelType.BASIC,
+                score=score, 
+                reason=reason
+            )
             
         except Exception as e:
             error_msg = f"Groq API error for {stock_data.symbol}: {e}"
@@ -155,7 +159,11 @@ class AIService:
                 score = 50
                 reason = analysis_text[:200] if analysis_text else "AI analysis completed"
             
-            return AIAnalysis(score=score, reason=reason)
+            return AIAnalysis(
+                ai_model=AIModelType.BASIC,
+                score=score, 
+                reason=reason
+            )
             
         except Exception as e:
             error_msg = f"OpenAI API error for {stock_data.symbol}: {e}"
@@ -206,7 +214,11 @@ class AIService:
         # Generate reasoning based on score and performance
         reasons = self._generate_mock_reasoning(symbol, score, change_percent, stock_data)
         
-        return AIAnalysis(score=score, reason=reasons)
+        return AIAnalysis(
+            ai_model=AIModelType.BASIC,
+            score=score, 
+            reason=reasons
+        )
     
     def _generate_mock_reasoning(self, symbol: str, score: int, change_percent: float, stock_data: StockData) -> str:
         """Generate realistic reasoning for the mock analysis."""

@@ -94,7 +94,7 @@ async def add_stock(
 @router.delete("/stocks/{symbol}")
 async def remove_stock(
     symbol: str,
-    current_admin: User = Depends(get_current_admin)
+    current_admin: str = Depends(get_current_admin)
 ):
     """Remove a stock from the tracked list."""
     try:
@@ -121,7 +121,7 @@ async def remove_stock(
         audit_service.log_action(
             "remove_stock", 
             f"Removed stock {symbol} from tracking list", 
-            current_admin.username
+            current_admin
         )
         
         # Force update to reflect changes immediately
@@ -137,7 +137,7 @@ async def remove_stock(
 
 
 @router.get("/prompts", response_model=AdminPromptResponse)
-async def get_prompts(current_admin: User = Depends(get_current_admin)):
+async def get_prompts(current_admin: str = Depends(get_current_admin)):
     """Get current AI analysis prompt."""
     try:
         prompt = config.get_ai_analysis_prompt()
@@ -149,7 +149,7 @@ async def get_prompts(current_admin: User = Depends(get_current_admin)):
 @router.put("/prompts")
 async def update_prompts(
     request: AdminPromptRequest,
-    current_admin: User = Depends(get_current_admin)
+    current_admin: str = Depends(get_current_admin)
 ):
     """Update AI analysis prompt."""
     try:
@@ -174,7 +174,7 @@ async def update_prompts(
         audit_service.log_action(
             "update_prompt", 
             "Updated AI analysis prompt", 
-            current_admin.username
+            current_admin
         )
         
         # Force update to use new prompt immediately
@@ -192,7 +192,7 @@ async def update_prompts(
 @router.get("/logs")
 async def get_audit_logs(
     limit: int = 100,
-    current_admin: User = Depends(get_current_admin)
+    current_admin: str = Depends(get_current_admin)
 ):
     """Get audit logs."""
     try:
@@ -203,7 +203,7 @@ async def get_audit_logs(
 
 
 @router.get("/config", response_model=AdminConfigResponse)
-async def get_config(current_admin: User = Depends(get_current_admin)):
+async def get_config(current_admin: str = Depends(get_current_admin)):
     """Get current data source and API key configuration."""
     try:
         data_source = config.get_data_source()
@@ -225,7 +225,7 @@ async def get_config(current_admin: User = Depends(get_current_admin)):
 @router.put("/config")
 async def update_config(
     request: AdminConfigRequest,
-    current_admin: User = Depends(get_current_admin)
+    current_admin: str = Depends(get_current_admin)
 ):
     """Update data source and API key configuration."""
     try:
@@ -241,7 +241,7 @@ async def update_config(
             audit_service.log_action(
                 "update_data_source", 
                 f"Changed data source to {request.data_source}", 
-                current_admin.username
+                current_admin
             )
             updated = True
         
@@ -252,7 +252,7 @@ async def update_config(
             audit_service.log_action(
                 "update_api_key", 
                 "Updated Alpha Vantage API key", 
-                current_admin.username
+                current_admin
             )
             updated = True
         
@@ -263,7 +263,7 @@ async def update_config(
             audit_service.log_action(
                 "update_api_key", 
                 "Updated Polygon.io API key", 
-                current_admin.username
+                current_admin
             )
             updated = True
         
@@ -274,7 +274,7 @@ async def update_config(
             audit_service.log_action(
                 "update_ai_provider", 
                 f"Changed AI provider to {request.ai_provider}", 
-                current_admin.username
+                current_admin
             )
             updated = True
         
@@ -285,7 +285,7 @@ async def update_config(
             audit_service.log_action(
                 "update_ai_model", 
                 f"Changed AI model to {request.ai_model}", 
-                current_admin.username
+                current_admin
             )
             updated = True
         
@@ -304,7 +304,7 @@ async def update_config(
 
 
 @router.post("/refresh")
-async def force_refresh(current_admin: User = Depends(get_current_admin)):
+async def force_refresh(current_admin: str = Depends(get_current_admin)):
     """Force refresh of stock data (admin only)."""
     try:
         scheduler_service = get_scheduler_service()
@@ -313,7 +313,7 @@ async def force_refresh(current_admin: User = Depends(get_current_admin)):
         audit_service.log_action(
             "force_refresh", 
             "Manually triggered stock data refresh", 
-            current_admin.username
+            current_admin
         )
         
         return {"message": "Stock data refresh initiated"}
@@ -328,7 +328,7 @@ async def force_refresh(current_admin: User = Depends(get_current_admin)):
 async def get_all_users(
     skip: int = 0,
     limit: int = 100,
-    current_admin: User = Depends(get_current_admin)
+    current_admin: str = Depends(get_current_admin)
 ):
     """Get all users for admin management."""
     try:
@@ -342,7 +342,7 @@ async def get_all_users(
 async def update_user(
     user_id: str,
     update_data: AdminUserUpdate,
-    current_admin: User = Depends(get_current_admin)
+    current_admin: str = Depends(get_current_admin)
 ):
     """Update user subscription tier and settings."""
     try:
@@ -362,7 +362,7 @@ async def update_user(
         audit_service.log_action(
             "update_user",
             f"Updated user {user_id}: {', '.join(changes)}",
-            current_admin.username
+            current_admin
         )
         
         return {"message": "User updated successfully"}
@@ -376,7 +376,7 @@ async def update_user(
 @router.get("/users/{user_id}/stocks")
 async def get_user_stocks(
     user_id: str,
-    current_admin: User = Depends(get_current_admin)
+    current_admin: str = Depends(get_current_admin)
 ):
     """Get stocks tracked by a specific user."""
     try:
@@ -387,7 +387,7 @@ async def get_user_stocks(
 
 
 @router.get("/stats")
-async def get_admin_stats(current_admin: User = Depends(get_current_admin)):
+async def get_admin_stats(current_admin: str = Depends(get_current_admin)):
     """Get system statistics for admin dashboard."""
     try:
         # Get all users to calculate stats
