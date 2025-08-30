@@ -149,7 +149,7 @@ function Dashboard() {
   }
 
   useEffect(() => {
-    loadDashboard()
+    loadDashboard(true) // Force initial load
   }, []) // Only load once on mount
 
   // Separate effect for auto-refresh with dynamic intervals
