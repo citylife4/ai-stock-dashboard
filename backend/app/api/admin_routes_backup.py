@@ -44,8 +44,9 @@ async def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(
 async def get_stock_list(current_admin: User = Depends(get_current_admin)):
     """Get current list of stocks being tracked."""
     try:
-        symbols = config.get_stock_symbols()
-        return AdminStockListResponse(symbols=symbols)
+        admin_config_service = await config.get_admin_config_service()
+        config_data = await admin_config_service.get_config()
+        return AdminStockListResponse(symbols=config_data.stock_symbols)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving stock list: {str(e)}")
 
@@ -57,8 +58,10 @@ async def add_stock(
 ):
     """Add a new stock to the tracked list."""
     try:
+        admin_config_service = await config.get_admin_config_service()
         # Get current symbols
-        current_symbols = config.get_stock_symbols()
+        config_data = await admin_config_service.get_config()
+        current_symbols = config_data.stock_symbols
         
         # Check if symbol already exists
         symbol = request.symbol.upper()
@@ -69,7 +72,7 @@ async def add_stock(
         new_symbols = current_symbols + [symbol]
         
         # Update configuration
-        if not config.update_stock_symbols(new_symbols):
+        if not await admin_config_service.update_stock_symbols(new_symbols):
             raise HTTPException(status_code=500, detail="Failed to update configuration")
         
         # Log the action
@@ -94,12 +97,14 @@ async def add_stock(
 @router.delete("/stocks/{symbol}")
 async def remove_stock(
     symbol: str,
-    current_admin: str = Depends(get_current_admin)
+    current_admin: User = Depends(get_current_admin)
 ):
     """Remove a stock from the tracked list."""
     try:
+        admin_config_service = await config.get_admin_config_service()
         # Get current symbols
-        current_symbols = config.get_stock_symbols()
+        config_data = await admin_config_service.get_config()
+        current_symbols = config_data.stock_symbols
         
         # Check if symbol exists
         symbol = symbol.upper()
@@ -114,14 +119,14 @@ async def remove_stock(
             raise HTTPException(status_code=400, detail="Cannot remove all stocks - at least one must remain")
         
         # Update configuration
-        if not config.update_stock_symbols(new_symbols):
+        if not await admin_config_service.update_stock_symbols(new_symbols):
             raise HTTPException(status_code=500, detail="Failed to update configuration")
         
         # Log the action
         audit_service.log_action(
             "remove_stock", 
             f"Removed stock {symbol} from tracking list", 
-            current_admin
+            current_admin.username
         )
         
         # Force update to reflect changes immediately
@@ -137,11 +142,11 @@ async def remove_stock(
 
 
 @router.get("/prompts", response_model=AdminPromptResponse)
-async def get_prompts(current_admin: str = Depends(get_current_admin)):
+async def get_prompts(current_admin: User = Depends(get_current_admin)):
     """Get current AI analysis prompt."""
     try:
-        prompt = config.get_ai_analysis_prompt()
-        return AdminPromptResponse(ai_analysis_prompt=prompt)
+        config_data = await admin_config_service.get_config()
+        return AdminPromptResponse(ai_analysis_prompt=config_data.ai_analysis_prompt)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving prompts: {str(e)}")
 
@@ -149,7 +154,7 @@ async def get_prompts(current_admin: str = Depends(get_current_admin)):
 @router.put("/prompts")
 async def update_prompts(
     request: AdminPromptRequest,
-    current_admin: str = Depends(get_current_admin)
+    current_admin: User = Depends(get_current_admin)
 ):
     """Update AI analysis prompt."""
     try:
@@ -167,14 +172,14 @@ async def update_prompts(
             )
         
         # Update configuration
-        if not config.update_ai_analysis_prompt(request.ai_analysis_prompt):
+        if not await admin_config_service.update_ai_analysis_prompt(request.ai_analysis_prompt):
             raise HTTPException(status_code=500, detail="Failed to update configuration")
         
         # Log the action
         audit_service.log_action(
             "update_prompt", 
             "Updated AI analysis prompt", 
-            current_admin
+            current_admin.username
         )
         
         # Force update to use new prompt immediately
@@ -192,7 +197,7 @@ async def update_prompts(
 @router.get("/logs")
 async def get_audit_logs(
     limit: int = 100,
-    current_admin: str = Depends(get_current_admin)
+    current_admin: User = Depends(get_current_admin)
 ):
     """Get audit logs."""
     try:
@@ -203,20 +208,16 @@ async def get_audit_logs(
 
 
 @router.get("/config", response_model=AdminConfigResponse)
-async def get_config(current_admin: str = Depends(get_current_admin)):
+async def get_config(current_admin: User = Depends(get_current_admin)):
     """Get current data source and API key configuration."""
     try:
-        data_source = config.get_data_source()
-        alpha_vantage_api_key = config.get_alpha_vantage_api_key()
-        polygon_api_key = config.get_polygon_api_key()
-        ai_provider = config.get_ai_provider()
-        ai_model = config.get_ai_model()
+        config_data = await admin_config_service.get_config()
         return AdminConfigResponse(
-            data_source=data_source, 
-            alpha_vantage_api_key=alpha_vantage_api_key,
-            polygon_api_key=polygon_api_key,
-            ai_provider=ai_provider,
-            ai_model=ai_model
+            data_source=config_data.data_source,
+            alpha_vantage_api_key=config_data.alpha_vantage_api_key,
+            polygon_api_key=config_data.polygon_api_key,
+            ai_provider=config_data.ai_provider,
+            ai_model=config_data.ai_model
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving configuration: {str(e)}")
@@ -225,7 +226,7 @@ async def get_config(current_admin: str = Depends(get_current_admin)):
 @router.put("/config")
 async def update_config(
     request: AdminConfigRequest,
-    current_admin: str = Depends(get_current_admin)
+    current_admin: User = Depends(get_current_admin)
 ):
     """Update data source and API key configuration."""
     try:
@@ -235,57 +236,57 @@ async def update_config(
             if request.data_source not in ["yahoo", "alpha_vantage", "polygon"]:
                 raise HTTPException(status_code=400, detail="Invalid data source. Must be 'yahoo', 'alpha_vantage', or 'polygon'")
             
-            if not config.update_data_source(request.data_source):
+            if not await admin_config_service.update_data_source(request.data_source):
                 raise HTTPException(status_code=500, detail="Failed to update data source")
             
             audit_service.log_action(
                 "update_data_source", 
                 f"Changed data source to {request.data_source}", 
-                current_admin
+                current_admin.username
             )
             updated = True
         
         if request.alpha_vantage_api_key is not None:
-            if not config.update_alpha_vantage_api_key(request.alpha_vantage_api_key):
+            if not await admin_config_service.update_alpha_vantage_api_key(request.alpha_vantage_api_key):
                 raise HTTPException(status_code=500, detail="Failed to update Alpha Vantage API key")
             
             audit_service.log_action(
                 "update_api_key", 
                 "Updated Alpha Vantage API key", 
-                current_admin
+                current_admin.username
             )
             updated = True
         
         if request.polygon_api_key is not None:
-            if not config.update_polygon_api_key(request.polygon_api_key):
+            if not await admin_config_service.update_polygon_api_key(request.polygon_api_key):
                 raise HTTPException(status_code=500, detail="Failed to update Polygon.io API key")
             
             audit_service.log_action(
                 "update_api_key", 
                 "Updated Polygon.io API key", 
-                current_admin
+                current_admin.username
             )
             updated = True
         
         if request.ai_provider is not None:
-            if not config.update_ai_provider(request.ai_provider):
+            if not await admin_config_service.update_ai_provider(request.ai_provider):
                 raise HTTPException(status_code=500, detail="Failed to update AI provider")
             
             audit_service.log_action(
                 "update_ai_provider", 
                 f"Changed AI provider to {request.ai_provider}", 
-                current_admin
+                current_admin.username
             )
             updated = True
         
         if request.ai_model is not None:
-            if not config.update_ai_model(request.ai_model):
+            if not await admin_config_service.update_ai_model(request.ai_model):
                 raise HTTPException(status_code=500, detail="Failed to update AI model")
             
             audit_service.log_action(
                 "update_ai_model", 
                 f"Changed AI model to {request.ai_model}", 
-                current_admin
+                current_admin.username
             )
             updated = True
         
@@ -304,7 +305,7 @@ async def update_config(
 
 
 @router.post("/refresh")
-async def force_refresh(current_admin: str = Depends(get_current_admin)):
+async def force_refresh(current_admin: User = Depends(get_current_admin)):
     """Force refresh of stock data (admin only)."""
     try:
         scheduler_service = get_scheduler_service()
@@ -313,7 +314,7 @@ async def force_refresh(current_admin: str = Depends(get_current_admin)):
         audit_service.log_action(
             "force_refresh", 
             "Manually triggered stock data refresh", 
-            current_admin
+            current_admin.username
         )
         
         return {"message": "Stock data refresh initiated"}
@@ -328,7 +329,7 @@ async def force_refresh(current_admin: str = Depends(get_current_admin)):
 async def get_all_users(
     skip: int = 0,
     limit: int = 100,
-    current_admin: str = Depends(get_current_admin)
+    current_admin: User = Depends(get_current_admin)
 ):
     """Get all users for admin management."""
     try:
@@ -342,7 +343,7 @@ async def get_all_users(
 async def update_user(
     user_id: str,
     update_data: AdminUserUpdate,
-    current_admin: str = Depends(get_current_admin)
+    current_admin: User = Depends(get_current_admin)
 ):
     """Update user subscription tier and settings."""
     try:
@@ -362,7 +363,7 @@ async def update_user(
         audit_service.log_action(
             "update_user",
             f"Updated user {user_id}: {', '.join(changes)}",
-            current_admin
+            current_admin.username
         )
         
         return {"message": "User updated successfully"}
@@ -373,10 +374,43 @@ async def update_user(
         raise HTTPException(status_code=500, detail=f"Error updating user: {str(e)}")
 
 
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: str,
+    current_admin: User = Depends(get_current_admin)
+):
+    """Delete a user and all associated data."""
+    try:
+        # Prevent admin from deleting themselves
+        if current_admin.id == user_id:
+            raise HTTPException(
+                status_code=400, 
+                detail="Admin cannot delete their own account"
+            )
+        
+        success = await user_service.delete_user(user_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="User not found or deletion failed")
+        
+        # Log the action
+        audit_service.log_action(
+            "delete_user",
+            f"Deleted user {user_id}",
+            current_admin.username
+        )
+        
+        return {"message": "User deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting user: {str(e)}")
+
+
 @router.get("/users/{user_id}/stocks")
 async def get_user_stocks(
     user_id: str,
-    current_admin: str = Depends(get_current_admin)
+    current_admin: User = Depends(get_current_admin)
 ):
     """Get stocks tracked by a specific user."""
     try:
@@ -387,7 +421,7 @@ async def get_user_stocks(
 
 
 @router.get("/stats")
-async def get_admin_stats(current_admin: str = Depends(get_current_admin)):
+async def get_admin_stats(current_admin: User = Depends(get_current_admin)):
     """Get system statistics for admin dashboard."""
     try:
         # Get all users to calculate stats

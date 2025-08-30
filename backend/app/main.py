@@ -32,6 +32,24 @@ async def lifespan(app: FastAPI):
     # Connect to database
     await connect_to_mongo()
     
+    # Initialize admin config service
+    from .services.admin_config_service import AdminConfigService
+    from .database import get_database
+    from .config import Config
+    
+    admin_config_service = AdminConfigService()
+    admin_config_service.set_database(get_database())
+    Config.set_admin_config_service(admin_config_service)
+    
+    # Ensure admin configuration exists
+    try:
+        await admin_config_service.get_config()
+        logger.info("Admin configuration loaded from MongoDB")
+    except Exception as e:
+        logger.info(f"Creating default admin configuration: {e}")
+        # This will create the default config if it doesn't exist
+        await admin_config_service.get_config()
+    
     # Ensure admin user exists
     from .services.user_service import UserService
     user_service = UserService()

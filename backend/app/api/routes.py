@@ -177,11 +177,40 @@ async def get_dashboard(current_user: Optional[User] = Depends(get_current_user_
                 if analysis.stock_data.symbol.upper() in [symbol.upper() for symbol in user_stocks]
             ]
             
-            # Create error entries for user stocks that don't have analysis
+            # Create placeholder stock data for stocks without analysis
             analyzed_symbols = {analysis.stock_data.symbol.upper() for analysis in filtered_results}
             missing_symbols = [symbol for symbol in user_stocks if symbol.upper() not in analyzed_symbols]
             
+            # Add placeholder entries for missing stock analysis
+            from ..models import StockData, AIAnalysis, MultiAIAnalysis, StockAnalysis, AIModelType
+            for symbol in missing_symbols:
+                placeholder_stock = StockAnalysis(
+                    stock_data=StockData(
+                        symbol=symbol.upper(),
+                        current_price=0.00,
+                        previous_close=0.00,
+                        change_percent=0.00,
+                        volume=0,
+                        market_cap=0,
+                        last_updated=datetime.now()
+                    ),
+                    ai_analysis=MultiAIAnalysis(
+                        analyses=[
+                            AIAnalysis(
+                                ai_model=AIModelType.WARREN_BUFFET,
+                                score=0,
+                                reason="Analysis pending - data will be updated soon"
+                            )
+                        ],
+                        average_score=0.0,
+                        timestamp=datetime.now()
+                    ),
+                    timestamp=datetime.now()
+                )
+                filtered_results.append(placeholder_stock)
+            
             user_errors = []
+            # Create error entries for user stocks that don't have real analysis
             for symbol in missing_symbols:
                 user_errors.append(ApiError(
                     type="analysis_missing",
@@ -210,7 +239,7 @@ async def get_dashboard(current_user: Optional[User] = Depends(get_current_user_
             return DashboardResponse(
                 stocks=filtered_results,
                 last_updated=last_updated or datetime.now(),
-                total_stocks=len(filtered_results),
+                total_stocks=len(user_stocks),  # Show actual tracked stocks count, not analysis count
                 max_stocks=max_stocks,
                 subscription_tier=tier_enum,
                 errors=user_errors,
@@ -319,3 +348,26 @@ async def get_stock_analysis(symbol: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving stock data: {str(e)}")
+
+
+@router.get("/available-stocks")
+async def get_available_stocks():
+    """Get list of stocks available for users to track (from admin configuration)."""
+    try:
+        from ..config import config
+        # Get the stocks configured by admin that are actually being tracked
+        available_stocks = config.get_stock_symbols()
+        
+        return {
+            "symbols": available_stocks,
+            "count": len(available_stocks),
+            "message": f"Showing {len(available_stocks)} stocks available for tracking"
+        }
+    except Exception as e:
+        logger.error(f"Error getting available stocks: {e}")
+        # Return default stocks as fallback
+        return {
+            "symbols": ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "NFLX"],
+            "count": 8,
+            "message": "Showing default stocks (error accessing configuration)"
+        }

@@ -1,0 +1,65 @@
+# Docker Compose configuration for Oracle Autonomous Database testing
+# This extends the existing docker-compose.yml with Oracle support
+
+version: '3.8'
+
+services:
+  backend-oracle:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.oracle
+    ports:
+      - "8001:8000"  # Different port to run alongside MongoDB version
+    environment:
+      - DATABASE_TYPE=oracle
+      - ORACLE_CONFIG_FILE=/app/oracle-config.json
+      - MONGODB_URL=mongodb://mongodb:27017  # Fallback for migration
+      - DATABASE_NAME=ai_stock_dashboard
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-jwt-secret-oracle}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - POLYGON_API_KEY=${POLYGON_API_KEY}
+      - ALPHA_VANTAGE_API_KEY=${ALPHA_VANTAGE_API_KEY}
+    volumes:
+      - ./oracle-config.json:/app/oracle-config.json:ro
+      - ./oracle-wallet:/app/oracle-wallet:ro
+      - ./backend:/app
+    depends_on:
+      - mongodb  # For migration purposes
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ai-stock-network
+
+  # Keep existing MongoDB service for migration/testing
+  mongodb:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27018:27017"  # Different port to avoid conflicts
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME:-admin}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:-admin123}
+      - MONGO_INITDB_DATABASE=${DATABASE_NAME:-ai_stock_dashboard}
+    volumes:
+      - mongodb_data_oracle_test:/data/db
+      - ./docker-init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ai-stock-network
+
+volumes:
+  mongodb_data_oracle_test:
+
+networks:
+  ai-stock-network:
+    driver: bridge

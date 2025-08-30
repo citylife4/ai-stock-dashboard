@@ -1,5 +1,5 @@
 import os
-import json
+import asyncio
 from typing import List
 from dotenv import load_dotenv
 
@@ -35,166 +35,148 @@ class Config:
     JWT_ALGORITHM = "HS256"
     JWT_EXPIRATION_HOURS = 24
     
-    # Stock symbols to analyze (default values)
-    _DEFAULT_STOCK_SYMBOLS = ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "NFLX"]
-    
     # Scheduler settings (in minutes)
     UPDATE_INTERVAL = 30  # Update every 30 minutes
     
-    # Default AI Analysis prompt
-    _DEFAULT_AI_ANALYSIS_PROMPT = """
-    Analyze the following stock data and provide:
-    1. A score from 0-100 (100 being the best investment opportunity)
-    2. A brief reason for the score (2-3 sentences)
-    
-    Consider factors like:
-    - Recent price performance
-    - Trading volume
-    - Market cap
-    - General market sentiment for the sector
-    
-    Stock Data:
-    Symbol: {symbol}
-    Current Price: ${current_price}
-    Previous Close: ${previous_close}
-    Daily Change: {change_percent}%
-    Volume: {volume}
-    Market Cap: ${market_cap}
-    
-    Respond in JSON format:
-    {{"score": <number>, "reason": "<explanation>"}}
-    """
-    
-    # Configuration file path
-    CONFIG_FILE = "admin_config.json"
+    # Admin config service will be initialized later to avoid circular imports
+    _admin_config_service = None
     
     @classmethod
-    def load_dynamic_config(cls):
-        """Load dynamic configuration from file."""
-        try:
-            if os.path.exists(cls.CONFIG_FILE):
-                with open(cls.CONFIG_FILE, 'r') as f:
-                    config_data = json.load(f)
-                    return config_data
-        except Exception as e:
-            print(f"Error loading config: {e}")
+    def set_admin_config_service(cls, service):
+        """Set the admin config service instance."""
+        cls._admin_config_service = service
+    
+    @classmethod
+    async def get_admin_config_service(cls):
+        """Get or create admin config service."""
+        if cls._admin_config_service is None:
+            from .services.admin_config_service import AdminConfigService
+            from .database import get_database
+            
+            cls._admin_config_service = AdminConfigService()
+            cls._admin_config_service.set_database(get_database())
         
-        # Return default configuration
-        return {
-            "stock_symbols": cls._DEFAULT_STOCK_SYMBOLS,
-            "ai_analysis_prompt": cls._DEFAULT_AI_ANALYSIS_PROMPT.strip(),
-            "data_source": "yahoo",  # Default to Yahoo Finance
-            "alpha_vantage_api_key": cls.ALPHA_VANTAGE_API_KEY or "",
-            "polygon_api_key": cls.POLYGON_API_KEY or "",
-            "ai_provider": "openai",  # Default AI provider
-            "ai_model": "gpt-3.5-turbo"  # Default AI model
-        }
+        return cls._admin_config_service
     
+    # MongoDB-based configuration methods
     @classmethod
-    def save_dynamic_config(cls, config_data):
-        """Save dynamic configuration to file."""
-        try:
-            with open(cls.CONFIG_FILE, 'w') as f:
-                json.dump(config_data, f, indent=2)
-            return True
-        except Exception as e:
-            print(f"Error saving config: {e}")
-            return False
+    async def get_config(cls):
+        """Get admin configuration from MongoDB."""
+        service = await cls.get_admin_config_service()
+        return await service.get_config()
     
     @classmethod
     def get_stock_symbols(cls) -> List[str]:
-        """Get current stock symbols from dynamic config."""
-        config_data = cls.load_dynamic_config()
-        return config_data.get("stock_symbols", cls._DEFAULT_STOCK_SYMBOLS)
+        """Get current stock symbols from MongoDB config."""
+        try:
+            loop = asyncio.get_event_loop()
+            config_data = loop.run_until_complete(cls.get_config())
+            return config_data.stock_symbols
+        except:
+            # Fallback to default symbols
+            return ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "NFLX"]
     
     @classmethod
     def get_ai_analysis_prompt(cls) -> str:
-        """Get current AI analysis prompt from dynamic config."""
-        config_data = cls.load_dynamic_config()
-        return config_data.get("ai_analysis_prompt", cls._DEFAULT_AI_ANALYSIS_PROMPT.strip())
+        """Get current AI analysis prompt from MongoDB config."""
+        try:
+            loop = asyncio.get_event_loop()
+            config_data = loop.run_until_complete(cls.get_config())
+            return config_data.ai_analysis_prompt
+        except:
+            return "Default analysis prompt"
     
     @classmethod
-    def update_stock_symbols(cls, symbols: List[str]) -> bool:
-        """Update stock symbols in dynamic config."""
-        config_data = cls.load_dynamic_config()
-        config_data["stock_symbols"] = symbols
-        return cls.save_dynamic_config(config_data)
+    async def update_stock_symbols(cls, symbols: List[str]) -> bool:
+        """Update stock symbols in MongoDB config."""
+        service = await cls.get_admin_config_service()
+        return await service.update_stock_symbols(symbols)
     
     @classmethod
-    def update_ai_analysis_prompt(cls, prompt: str) -> bool:
-        """Update AI analysis prompt in dynamic config."""
-        config_data = cls.load_dynamic_config()
-        config_data["ai_analysis_prompt"] = prompt
-        return cls.save_dynamic_config(config_data)
+    async def update_ai_analysis_prompt(cls, prompt: str) -> bool:
+        """Update AI analysis prompt in MongoDB config."""
+        service = await cls.get_admin_config_service()
+        return await service.update_ai_analysis_prompt(prompt)
     
     @classmethod
     def get_data_source(cls) -> str:
-        """Get current data source from dynamic config."""
-        config_data = cls.load_dynamic_config()
-        return config_data.get("data_source", "yahoo")
+        """Get current data source from MongoDB config."""
+        try:
+            loop = asyncio.get_event_loop()
+            config_data = loop.run_until_complete(cls.get_config())
+            return config_data.data_source
+        except:
+            return "yahoo"
     
     @classmethod
     def get_alpha_vantage_api_key(cls) -> str:
-        """Get Alpha Vantage API key from dynamic config or environment."""
-        config_data = cls.load_dynamic_config()
-        return config_data.get("alpha_vantage_api_key") or cls.ALPHA_VANTAGE_API_KEY or ""
+        """Get Alpha Vantage API key from MongoDB config or environment."""
+        try:
+            loop = asyncio.get_event_loop()
+            config_data = loop.run_until_complete(cls.get_config())
+            return config_data.alpha_vantage_api_key or cls.ALPHA_VANTAGE_API_KEY or ""
+        except:
+            return cls.ALPHA_VANTAGE_API_KEY or ""
     
     @classmethod
-    def update_data_source(cls, data_source: str) -> bool:
-        """Update data source in dynamic config."""
-        if data_source not in ["yahoo", "alpha_vantage", "polygon"]:
-            return False
-        config_data = cls.load_dynamic_config()
-        config_data["data_source"] = data_source
-        return cls.save_dynamic_config(config_data)
+    async def update_data_source(cls, data_source: str) -> bool:
+        """Update data source in MongoDB config."""
+        service = await cls.get_admin_config_service()
+        return await service.update_data_source(data_source)
     
     @classmethod
-    def update_alpha_vantage_api_key(cls, api_key: str) -> bool:
-        """Update Alpha Vantage API key in dynamic config."""
-        config_data = cls.load_dynamic_config()
-        config_data["alpha_vantage_api_key"] = api_key
-        return cls.save_dynamic_config(config_data)
+    async def update_alpha_vantage_api_key(cls, api_key: str) -> bool:
+        """Update Alpha Vantage API key in MongoDB config."""
+        service = await cls.get_admin_config_service()
+        return await service.update_alpha_vantage_api_key(api_key)
     
     @classmethod
     def get_polygon_api_key(cls) -> str:
-        """Get Polygon.io API key from dynamic config or environment."""
-        config_data = cls.load_dynamic_config()
-        return config_data.get("polygon_api_key") or cls.POLYGON_API_KEY or ""
+        """Get Polygon.io API key from MongoDB config or environment."""
+        try:
+            loop = asyncio.get_event_loop()
+            config_data = loop.run_until_complete(cls.get_config())
+            return config_data.polygon_api_key or cls.POLYGON_API_KEY or ""
+        except:
+            return cls.POLYGON_API_KEY or ""
     
     @classmethod
-    def update_polygon_api_key(cls, api_key: str) -> bool:
-        """Update Polygon.io API key in dynamic config."""
-        config_data = cls.load_dynamic_config()
-        config_data["polygon_api_key"] = api_key
-        return cls.save_dynamic_config(config_data)
+    async def update_polygon_api_key(cls, api_key: str) -> bool:
+        """Update Polygon.io API key in MongoDB config."""
+        service = await cls.get_admin_config_service()
+        return await service.update_polygon_api_key(api_key)
     
     @classmethod
     def get_ai_provider(cls) -> str:
-        """Get AI provider from dynamic config."""
-        config_data = cls.load_dynamic_config()
-        return config_data.get("ai_provider", "openai")
+        """Get AI provider from MongoDB config."""
+        try:
+            loop = asyncio.get_event_loop()
+            config_data = loop.run_until_complete(cls.get_config())
+            return config_data.ai_provider
+        except:
+            return "openai"
     
     @classmethod
     def get_ai_model(cls) -> str:
-        """Get AI model from dynamic config."""
-        config_data = cls.load_dynamic_config()
-        return config_data.get("ai_model", "gpt-3.5-turbo")
+        """Get AI model from MongoDB config."""
+        try:
+            loop = asyncio.get_event_loop()
+            config_data = loop.run_until_complete(cls.get_config())
+            return config_data.ai_model
+        except:
+            return "gpt-3.5-turbo"
     
     @classmethod
-    def update_ai_provider(cls, provider: str) -> bool:
-        """Update AI provider in dynamic config."""
-        if provider not in ["openai", "groq"]:
-            return False
-        config_data = cls.load_dynamic_config()
-        config_data["ai_provider"] = provider
-        return cls.save_dynamic_config(config_data)
+    async def update_ai_provider(cls, provider: str) -> bool:
+        """Update AI provider in MongoDB config."""
+        service = await cls.get_admin_config_service()
+        return await service.update_ai_provider(provider)
     
     @classmethod
-    def update_ai_model(cls, model: str) -> bool:
-        """Update AI model in dynamic config."""
-        config_data = cls.load_dynamic_config()
-        config_data["ai_model"] = model
-        return cls.save_dynamic_config(config_data)
+    async def update_ai_model(cls, model: str) -> bool:
+        """Update AI model in MongoDB config."""
+        service = await cls.get_admin_config_service()
+        return await service.update_ai_model(model)
 
 
 config = Config()

@@ -1,25 +1,32 @@
 import { useState, useEffect } from 'react'
 import { Plus, Trash2, Search, TrendingUp, AlertCircle, Check, X } from 'lucide-react'
-import { getUserStocks, addUserStock, removeUserStock } from '../services/api'
+import { getUserStocks, addUserStock, removeUserStock, getAvailableStocks } from '../services/api'
 import './UserStockManager.css'
 
 function UserStockManager({ user, onClose }) {
   const [userStocks, setUserStocks] = useState([])
+  const [availableStocks, setAvailableStocks] = useState([])
   const [newSymbol, setNewSymbol] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
   const [searchResults, setSearchResults] = useState([])
 
-  // Popular stock suggestions
-  const popularStocks = [
-    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX', 'AMD', 'INTC',
-    'ORCL', 'CRM', 'ADBE', 'PYPL', 'ZOOM', 'UBER', 'LYFT', 'TWTR', 'SNAP', 'SPOT'
-  ]
-
   useEffect(() => {
     loadUserStocks()
+    loadAvailableStocks()
   }, [])
+
+  const loadAvailableStocks = async () => {
+    try {
+      const response = await getAvailableStocks()
+      setAvailableStocks(response.symbols || [])
+    } catch (err) {
+      console.error('Error loading available stocks:', err)
+      // Fallback to a basic list if API fails
+      setAvailableStocks(['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'AMZN', 'NVDA', 'META', 'NFLX'])
+    }
+  }
 
   const loadUserStocks = async () => {
     try {
@@ -92,8 +99,8 @@ function UserStockManager({ user, onClose }) {
     }
   }
 
-  const filterPopularStocks = () => {
-    return popularStocks.filter(stock => 
+  const filterAvailableStocks = () => {
+    return availableStocks.filter(stock => 
       !userStocks.includes(stock) && 
       (newSymbol === '' || stock.toLowerCase().includes(newSymbol.toLowerCase()))
     ).slice(0, 10)
@@ -171,9 +178,9 @@ function UserStockManager({ user, onClose }) {
 
           {userStocks.length < user.max_stocks && (
             <div className="popular-stocks">
-              <h4>Popular Stocks</h4>
+              <h4>Available Stocks</h4>
               <div className="stock-suggestions">
-                {filterPopularStocks().map(symbol => (
+                {filterAvailableStocks().map(symbol => (
                   <button
                     key={symbol}
                     onClick={() => handleAddStock(symbol)}

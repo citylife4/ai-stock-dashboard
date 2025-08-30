@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { 
   Settings, LogOut, User, Users, BarChart3, Crown, Shield, Zap,
-  RefreshCw, AlertCircle, Check, X, Edit2, Save, Database, Activity, Brain, ArrowLeft, Trash2 
+  RefreshCw, AlertCircle, Check, X, Edit2, Save, Database, Activity, Brain, ArrowLeft, Trash2, Plus, TrendingUp
 } from 'lucide-react'
 import { 
   getUsers, updateUser, deleteUser, getAdminStats, getAuditLogs,
-  getConfig, updateConfig, forceRefresh, adminLogout, getAdminUserStocks
+  getConfig, updateConfig, forceRefresh, adminLogout, getAdminUserStocks,
+  getStockList, addStock, removeStock
 } from '../services/api'
 import AIConfiguration from './AIConfiguration'
 import './AdminDashboard.css'

@@ -208,4 +208,24 @@ class AIModelConfig(BaseModel):
     description: str
     prompt_template: str
     subscription_tiers: List[SubscriptionTier]
+
+
+# MongoDB Admin Configuration
+class AdminConfig(BaseModel):
+    id: Optional[str] = Field(None, alias="_id")
+    stock_symbols: List[str] = Field(default_factory=lambda: ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "NFLX"])
+    ai_analysis_prompt: str = Field(default="")
+    data_source: str = Field(default="yahoo")
+    alpha_vantage_api_key: str = Field(default="")
+    polygon_api_key: str = Field(default="")
+    ai_provider: str = Field(default="openai")
+    ai_model: str = Field(default="gpt-3.5-turbo")
+    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
+    
+    class Config:
+        allow_population_by_field_name = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
     is_active: bool = True

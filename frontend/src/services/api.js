@@ -334,3 +334,12 @@ export const getUserStocks = async () => {
     throw handleApiError(error, 'fetching user stocks')
   }
 }
+
+export const getAvailableStocks = async () => {
+  try {
+    const response = await api.get('/available-stocks')
+    return response.data
+  } catch (error) {
+    throw handleApiError(error, 'fetching available stocks')
+  }
+}
